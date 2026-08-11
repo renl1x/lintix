@@ -174,13 +174,13 @@ setup_security() {
     echo "${GREEN}Configurando ferramentas de segurança...${NC}"
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y ufw apparmor
+        sudo apt install -y ufw
         sudo systemctl enable ufw
         sudo systemctl start ufw
         sudo systemctl enable apparmor
         sudo systemctl start apparmor
     elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm ufw apparmor fwupd
+        sudo pacman -S --noconfirm apparmor fwupd
         sudo systemctl enable ufw
         sudo systemctl start ufw
         sudo systemctl enable apparmor
