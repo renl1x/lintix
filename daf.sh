@@ -171,6 +171,78 @@ select_browser() {
     sleep 1
 }
 
+select_office() {
+    clear_screen
+    show_section "APLICATIVOS OFFICE E MULTIMÍDIA"
+    echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
+    echo ""
+    show_option "1" "OnlyOffice (Suite de escritório)"
+    show_option "2" "GIMP (Editor de imagens)"
+    show_option "3" "Kdenlive (Editor de vídeo)"
+    show_option "4" "OBS Studio (Gravação/Streaming)"
+    show_option "5" "Obsidian (Notas/Knowledge base)"
+    show_option "6" "Instalar todos"
+    show_option "7" "Nenhum"
+    echo ""
+    read -p "Opção [1-7] (Enter para Nenhum): " office_opt
+    
+    case "$office_opt" in
+        1) echo "onlyoffice" > "$STATE_DIR/office" ;;
+        2) echo "gimp" > "$STATE_DIR/office" ;;
+        3) echo "kdenlive" > "$STATE_DIR/office" ;;
+        4) echo "obs" > "$STATE_DIR/office" ;;
+        5) echo "obsidian" > "$STATE_DIR/office" ;;
+        6) echo "all" > "$STATE_DIR/office" ;;
+        7|"") echo "none" > "$STATE_DIR/office"
+             echo "${GREEN}Nenhum aplicativo office selecionado.${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_office
+           return
+    esac
+    
+    if [[ "$office_opt" != "7" && "$office_opt" != "" ]]; then
+        echo "${GREEN}Aplicativo(s) office selecionado(s)!${NC}"
+    fi
+    sleep 1
+}
+
+select_games() {
+    clear_screen
+    show_section "JOGOS E PLATAFORMAS"
+    echo "  Selecione os jogos/plataformas que deseja instalar (escolha múltiplos):"
+    echo ""
+    show_option "1" "Steam"
+    show_option "2" "Proton Plus"
+    show_option "3" "Prism Launcher (Minecraft)"
+    show_option "4" "Sober (Roblox)"
+    show_option "5" "Faugus Launcher"
+    show_option "6" "Instalar todos"
+    show_option "7" "Nenhum"
+    echo ""
+    read -p "Opção [1-7] (Enter para Nenhum): " games_opt
+    
+    case "$games_opt" in
+        1) echo "steam" > "$STATE_DIR/games" ;;
+        2) echo "proton" > "$STATE_DIR/games" ;;
+        3) echo "prism" > "$STATE_DIR/games" ;;
+        4) echo "sober" > "$STATE_DIR/games" ;;
+        5) echo "faugus" > "$STATE_DIR/games" ;;
+        6) echo "all" > "$STATE_DIR/games" ;;
+        7|"") echo "none" > "$STATE_DIR/games"
+             echo "${GREEN}Nenhum jogo selecionado.${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_games
+           return
+    esac
+    
+    if [[ "$games_opt" != "7" && "$games_opt" != "" ]]; then
+        echo "${GREEN}Jogo(s) selecionado(s)!${NC}"
+    fi
+    sleep 1
+}
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -454,6 +526,86 @@ install_browser() {
     esac
 }
 
+install_office() {
+    local office=$(cat "$STATE_DIR/office")
+    
+    if [[ "$office" == "none" ]]; then
+        return
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Instalando aplicativos Office${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    case "$office" in
+        onlyoffice)
+            flatpak install -y flathub org.onlyoffice.desktopeditors
+            ;;
+        gimp)
+            flatpak install -y flathub org.gimp.GIMP
+            ;;
+        kdenlive)
+            flatpak install -y flathub org.kde.kdenlive
+            ;;
+        obs)
+            flatpak install -y flathub com.obsproject.Studio
+            ;;
+        obsidian)
+            flatpak install -y flathub md.obsidian.Obsidian
+            ;;
+        all)
+            flatpak install -y flathub org.onlyoffice.desktopeditors
+            flatpak install -y flathub org.gimp.GIMP
+            flatpak install -y flathub org.kde.kdenlive
+            flatpak install -y flathub com.obsproject.Studio
+            flatpak install -y flathub md.obsidian.Obsidian
+            ;;
+    esac
+    
+    echo "${GREEN}✓ Aplicativos office instalados!${NC}"
+    echo ""
+}
+
+install_games() {
+    local games=$(cat "$STATE_DIR/games")
+    
+    if [[ "$games" == "none" ]]; then
+        return
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Instalando jogos e plataformas${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    case "$games" in
+        steam)
+            flatpak install -y flathub com.valvesoftware.Steam
+            ;;
+        proton)
+            flatpak install -y flathub net.davidotek.pupgui2
+            ;;
+        prism)
+            flatpak install -y flathub org.prismlauncher.PrismLauncher
+            ;;
+        sober)
+            flatpak install -y flathub org.vinegarhq.Sober
+            ;;
+        faugus)
+            flatpak install -y flathub io.github.Faugus.faugus-launcher
+            ;;
+        all)
+            flatpak install -y flathub com.valvesoftware.Steam
+            flatpak install -y flathub net.davidotek.pupgui2
+            flatpak install -y flathub org.prismlauncher.PrismLauncher
+            flatpak install -y flathub org.vinegarhq.Sober
+            flatpak install -y flathub io.github.Faugus.faugus-launcher
+            ;;
+    esac
+    
+    echo "${GREEN}✓ Jogos e plataformas instalados!${NC}"
+    echo ""
+}
+
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -669,6 +821,8 @@ main() {
     detect_cpu
     select_desktop
     select_browser
+    select_office
+    select_games
     setup_sources
     install_base
     setup_security
@@ -676,6 +830,8 @@ main() {
     install_gpu_drivers
     install_desktop
     install_browser
+    install_office
+    install_games
     setup_network
     setup_zram
     setup_btrfs_compression
