@@ -95,6 +95,27 @@ ask_extra_repos() {
     sleep 1
 }
 
+select_browser() {
+    clear_screen
+    show_section "SELECIONE O BROWSER"
+    show_option "1" "Zen Browser (Flatpak)"
+    show_option "2" "Helium Browser"
+    echo ""
+    read -p "Opção [1-2] (Enter para Zen Browser): " browser_opt
+    
+    case "$browser_opt" in
+        1|"") echo "zen" > "$STATE_DIR/browser"
+             echo "${GREEN}Browser: Zen Browser${NC}" ;;
+        2) echo "helium" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Helium Browser${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_browser
+           return
+    esac
+    sleep 1
+}
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -167,6 +188,34 @@ setup_package_managers() {
         if [[ "$extra_repos" == "1" ]]; then
             sudo pacman -S --noconfirm yay
         fi
+    fi
+}
+
+install_browser() {
+    local browser=$(cat "$STATE_DIR/browser")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                sudo apt update
+                sudo apt install -y helium-bin
+                ;;
+        esac
+    elif [[ "$distro" == "arch" ]]; then
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                sudo pacman -S --noconfirm helium-browser-bin
+                ;;
+        esac
     fi
 }
 
@@ -424,6 +473,7 @@ main() {
     detect_cpu
     select_desktop
     ask_extra_repos
+    select_browser
     setup_sources
     install_base
     install_cpu_microcode
@@ -433,6 +483,7 @@ main() {
     setup_zram
     setup_btrfs_compression
     setup_package_managers
+    install_browser
     setup_performance_vars
     remove_packages
     ask_reboot
