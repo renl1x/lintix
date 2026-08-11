@@ -87,22 +87,20 @@ ask_extras() {
     echo "  1) Snapd (Snap packages)"
     echo "  2) Pacstall (AUR-style package manager for Debian)"
     echo "  4) Waydroid (Container Android)"
+    echo "  8) WinBoat (Windows emulator)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     echo "${YELLOW}Exemplos:${NC}"
     echo "  - Apenas Snapd: digite 1"
-    echo "  - Apenas Pacstall: digite 2"
-    echo "  - Apenas Waydroid: digite 4"
-    echo "  - Snapd + Pacstall: digite 3"
-    echo "  - Snapd + Waydroid: digite 5"
-    echo "  - Pacstall + Waydroid: digite 6"
-    echo "  - Todos: digite 7"
+    echo "  - Apenas WinBoat: digite 8"
+    echo "  - Snapd + WinBoat: digite 9"
+    echo "  - Todos: digite 15"
     echo "  - Nenhum: digite 0"
     echo ""
-    read -p "Digite a soma das opções desejadas [0-7]: " extra_sum
+    read -p "Digite a soma das opções desejadas [0-15]: " extra_sum
     
-    if [[ ! "$extra_sum" =~ ^[0-7]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 7.${NC}"
+    if [[ ! "$extra_sum" =~ ^[0-9]|1[0-5]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 15.${NC}"
         sleep 2
         ask_extras
         return
@@ -123,6 +121,9 @@ ask_extras() {
         fi
         if [[ $((extra_sum & 4)) -ne 0 ]]; then
             echo "  ${GREEN}✓ Waydroid${NC}"
+        fi
+        if [[ $((extra_sum & 8)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ WinBoat${NC}"
         fi
     fi
     echo ""
@@ -257,6 +258,41 @@ install_waydroid() {
     fi
     
     echo "${GREEN}Waydroid instalado com sucesso!${NC}"
+}
+
+install_winboat() {
+    local distro=$(cat "$STATE_DIR/distro")
+    local extras_sum=$(cat "$STATE_DIR/extras_sum")
+    local install_winboat=0
+    
+    if [[ $((extras_sum & 8)) -ne 0 ]]; then
+        install_winboat=1
+    fi
+    
+    if [[ "$install_winboat" != "1" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando WinBoat...${NC}"
+    
+    if [[ "$distro" == "debian" ]]; then
+        local latest_url=$(curl -s https://api.github.com/repos/winboat-org/winboat/releases/latest | grep "browser_download_url.*amd64.deb" | cut -d '"' -f 4)
+        
+        if [ -z "$latest_url" ]; then
+            echo "${RED}Erro: Não foi possível encontrar a URL do pacote mais recente.${NC}"
+            return 1
+        fi
+        
+        local deb_file=$(basename "$latest_url")
+        wget "$latest_url" -O "$deb_file"
+        sudo dpkg -i "$deb_file"
+        rm -f "$deb_file"
+        
+    elif [[ "$distro" == "arch" ]]; then
+        sudo pacman -S --noconfirm winboat
+    fi
+    
+    echo "${GREEN}WinBoat instalado com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -574,6 +610,7 @@ main() {
     setup_btrfs_compression
     setup_package_managers
     install_waydroid
+    install_winboat
     install_browser
     setup_performance_vars
     remove_packages
