@@ -88,12 +88,12 @@ ask_extras() {
     echo "  2) Pacstall (AUR-style package manager for Debian)"
     echo "  4) Waydroid (Container Android)"
     echo "  8) WinBoat (Windows emulator)"
-    echo " 16) Nix Package Manager"
+    echo " 16) Yay (AUR helper for Arch)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Nix: digite 16"
-    echo "  - WinBoat + Nix: digite 24"
+    echo "  - Apenas Yay: digite 16"
+    echo "  - WinBoat + Yay: digite 24"
     echo "  - Todos: digite 31"
     echo "  - Nenhum: digite 0"
     echo ""
@@ -126,7 +126,7 @@ ask_extras() {
             echo "  ${GREEN}✓ WinBoat${NC}"
         fi
         if [[ $((extra_sum & 16)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Nix Package Manager${NC}"
+            echo "  ${GREEN}✓ Yay${NC}"
         fi
     fi
     echo ""
@@ -314,12 +314,16 @@ setup_package_managers() {
     local extras_sum=$(cat "$STATE_DIR/extras_sum")
     local install_snapd=0
     local install_pacstall=0
+    local install_yay=0
     
     if [[ $((extras_sum & 1)) -ne 0 ]]; then
         install_snapd=1
     fi
     if [[ $((extras_sum & 2)) -ne 0 ]]; then
         install_pacstall=1
+    fi
+    if [[ $((extras_sum & 16)) -ne 0 ]]; then
+        install_yay=1
     fi
     
     if [[ "$distro" == "debian" ]]; then
@@ -345,7 +349,7 @@ setup_package_managers() {
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
         
-        if [[ "$install_snapd" == "1" ]] || [[ "$install_pacstall" == "1" ]]; then
+        if [[ "$install_yay" == "1" ]]; then
             sudo pacman -S --noconfirm yay
         fi
     fi
@@ -416,23 +420,6 @@ install_winboat() {
     fi
     
     echo "${GREEN}WinBoat instalado com sucesso!${NC}"
-}
-
-install_nix() {
-    local extras_sum=$(cat "$STATE_DIR/extras_sum")
-    local install_nix=0
-    
-    if [[ $((extras_sum & 16)) -ne 0 ]]; then
-        install_nix=1
-    fi
-    
-    if [[ "$install_nix" != "1" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando Nix Package Manager...${NC}"
-    curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh -s -- --daemon
-    echo "${GREEN}Nix Package Manager instalado com sucesso!${NC}"
 }
 
 install_productivity() {
@@ -828,7 +815,6 @@ main() {
     install_flatpak_base
     install_waydroid
     install_winboat
-    install_nix
     install_productivity
     install_games
     install_browser
