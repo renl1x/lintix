@@ -29,18 +29,6 @@ confirm() {
     fi
 }
 
-confirm_yes() {
-    local prompt="$1"
-    local resposta
-    read -p "$prompt (S/n): " -n 1 resposta
-    echo
-    if [[ -z "$resposta" ]]; then
-        return 0
-    else
-        [[ "$resposta" =~ ^[Ss]$ ]]
-    fi
-}
-
 clear_screen() { clear; }
 
 show_section() {
@@ -90,40 +78,55 @@ detect_cpu() {
     fi
 }
 
-ask_extra_repos() {
+ask_extras() {
     clear_screen
     show_section "EXTRAS - SELEÇÃO INDIVIDUAL"
-    echo "${YELLOW}Selecione quais extras deseja instalar:${NC}"
+    echo "${YELLOW}Digite a soma dos números dos extras que deseja instalar:${NC}"
     echo ""
-    
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  ${BOLD}Repositórios Extras${NC}"
-    echo "  Debian: snapd + pacstall"
-    echo "  Arch:   yay (AUR helper)"
+    echo "  1) Snapd (Snap packages)"
+    echo "  2) Pacstall (AUR-style package manager for Debian)"
+    echo "  4) Waydroid (Container Android)"
     echo ""
-    if confirm_yes "Instalar repositórios extras?"; then
-        echo "1" > "$STATE_DIR/extra_repos"
-        echo "${GREEN}✓ Repositórios extras ativados${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${YELLOW}Exemplos:${NC}"
+    echo "  - Apenas Snapd: digite 1"
+    echo "  - Apenas Pacstall: digite 2"
+    echo "  - Apenas Waydroid: digite 4"
+    echo "  - Snapd + Pacstall: digite 3"
+    echo "  - Snapd + Waydroid: digite 5"
+    echo "  - Pacstall + Waydroid: digite 6"
+    echo "  - Todos: digite 7"
+    echo "  - Nenhum: digite 0"
+    echo ""
+    read -p "Digite a soma das opções desejadas [0-7]: " extra_sum
+    
+    if [[ ! "$extra_sum" =~ ^[0-7]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 7.${NC}"
+        sleep 2
+        ask_extras
+        return
+    fi
+    
+    echo "$extra_sum" > "$STATE_DIR/extras_sum"
+    
+    echo ""
+    echo "${GREEN}Opções selecionadas:${NC}"
+    if [[ "$extra_sum" == "0" ]]; then
+        echo "  ${YELLOW}Nenhum extra selecionado${NC}"
     else
-        echo "0" > "$STATE_DIR/extra_repos"
-        echo "${YELLOW}✗ Repositórios extras desativados${NC}"
+        if [[ $((extra_sum & 1)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Snapd${NC}"
+        fi
+        if [[ $((extra_sum & 2)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Pacstall${NC}"
+        fi
+        if [[ $((extra_sum & 4)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Waydroid${NC}"
+        fi
     fi
     echo ""
-    
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  ${BOLD}Waydroid${NC}"
-    echo "  Container Android para Linux"
-    echo ""
-    if confirm_yes "Instalar Waydroid?"; then
-        echo "1" > "$STATE_DIR/waydroid"
-        echo "${GREEN}✓ Waydroid ativado${NC}"
-    else
-        echo "0" > "$STATE_DIR/waydroid"
-        echo "${YELLOW}✗ Waydroid desativado${NC}"
-    fi
-    echo ""
-    
-    sleep 1
+    sleep 2
 }
 
 setup_sources() {
@@ -173,7 +176,16 @@ install_base() {
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
-    local extra_repos=$(cat "$STATE_DIR/extra_repos")
+    local extras_sum=$(cat "$STATE_DIR/extras_sum")
+    local install_snapd=0
+    local install_pacstall=0
+    
+    if [[ $((extras_sum & 1)) -ne 0 ]]; then
+        install_snapd=1
+    fi
+    if [[ $((extras_sum & 2)) -ne 0 ]]; then
+        install_pacstall=1
+    fi
     
     if [[ "$distro" == "debian" ]]; then
         sudo apt install -y flatpak
@@ -186,16 +198,19 @@ setup_package_managers() {
         
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
         
-        if [[ "$extra_repos" == "1" ]]; then
+        if [[ "$install_snapd" == "1" ]]; then
             sudo apt install -y snapd
             sudo systemctl enable snapd
             sudo systemctl start snapd
+        fi
+        
+        if [[ "$install_pacstall" == "1" ]]; then
             sudo bash -c "$(curl -fsSL https://pacstall.dev/q/install)"
         fi
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
         
-        if [[ "$extra_repos" == "1" ]]; then
+        if [[ "$install_snapd" == "1" ]] || [[ "$install_pacstall" == "1" ]]; then
             sudo pacman -S --noconfirm yay
         fi
     fi
@@ -203,9 +218,14 @@ setup_package_managers() {
 
 install_waydroid() {
     local distro=$(cat "$STATE_DIR/distro")
-    local waydroid=$(cat "$STATE_DIR/waydroid")
+    local extras_sum=$(cat "$STATE_DIR/extras_sum")
+    local install_waydroid=0
     
-    if [[ "$waydroid" != "1" ]]; then
+    if [[ $((extras_sum & 4)) -ne 0 ]]; then
+        install_waydroid=1
+    fi
+    
+    if [[ "$install_waydroid" != "1" ]]; then
         return
     fi
     
@@ -522,7 +542,7 @@ main() {
     detect_gpu
     detect_cpu
     select_desktop
-    ask_extra_repos
+    ask_extras
     select_browser
     setup_sources
     install_base
