@@ -231,7 +231,21 @@ setup_sources() {
             
         almalinux)
             # Adiciona EPEL para AlmaLinux
+            echo "${YELLOW}Adicionando EPEL...${NC}"
             sudo dnf install -y epel-release
+            
+            # Adiciona RPM Fusion para AlmaLinux
+            echo "${YELLOW}Adicionando RPM Fusion...${NC}"
+            local rhel_version=$(rpm -E %rhel)
+            sudo dnf install --nogpgcheck -y \
+                https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_version}.noarch.rpm \
+                https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${rhel_version}.noarch.rpm
+            
+            # Habilita CRB (CodeReady Builder) para AlmaLinux
+            echo "${YELLOW}Habilitando CRB (CodeReady Builder)...${NC}"
+            sudo /usr/bin/crb enable
+            
+            # Atualiza o sistema
             sudo dnf update -y
             sudo dnf upgrade -y
             ;;
@@ -562,6 +576,43 @@ import_mok_key() {
     echo "${YELLOW}Reinicie o sistema para concluir o enrollment da chave MOK.${NC}"
 }
 
+install_nvidia_debian() {
+    echo "${YELLOW}Instalando drivers NVIDIA no Debian...${NC}"
+    
+    # Detecta a versão do Debian
+    if [ -f /etc/debian_version ]; then
+        local debian_version=$(cat /etc/debian_version | cut -d. -f1)
+        local distro_name=""
+        
+        case "$debian_version" in
+            10) distro_name="buster" ;;
+            11) distro_name="bullseye" ;;
+            12) distro_name="bookworm" ;;
+            13) distro_name="trixie" ;;
+            14) distro_name="forky" ;;
+            *) distro_name="bookworm" ;;
+        esac
+        
+        echo "${YELLOW}Detectado Debian ${debian_version} (${distro_name})${NC}"
+        
+        # Baixa e instala o keyring da NVIDIA
+        wget https://developer.download.nvidia.com/compute/cuda/repos/${distro_name}/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt update
+        
+        # Instala o driver NVIDIA
+        sudo apt -y install nvidia-open
+        rm -f cuda-keyring_1.1-1_all.deb
+        
+        echo "${GREEN}✓ Drivers NVIDIA instalados com sucesso!${NC}"
+        
+        # Importa a chave MOK se Secure Boot estiver ativo
+        import_mok_key
+    else
+        echo "${RED}Erro: Não foi possível detectar a versão do Debian${NC}"
+    fi
+}
+
 install_gpu_drivers() {
     local gpu=$(cat "$STATE_DIR/gpu_driver")
     local distro=$(cat "$STATE_DIR/distro")
@@ -573,13 +624,7 @@ install_gpu_drivers() {
                     sudo apt install -y mesa-vulkan-drivers
                     ;;
                 nvidia)
-                    sudo apt install -y linux-headers-amd64
-                    wget https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb
-                    sudo dpkg -i cuda-keyring_1.1-1_all.deb
-                    sudo apt update
-                    sudo apt -y install nvidia-open
-                    rm -f cuda-keyring_1.1-1_all.deb
-                    import_mok_key
+                    install_nvidia_debian
                     ;;
             esac
             ;;
