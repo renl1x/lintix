@@ -50,7 +50,7 @@ detect_distro() {
     elif [ -f /etc/arch-release ]; then
         echo "arch" > "$STATE_DIR/distro"
     elif [ -f /etc/almalinux-release ]; then
-        echo "alma" > "$STATE_DIR/distro"
+        echo "almalinux" > "$STATE_DIR/distro"
     else
         echo "unknown" > "$STATE_DIR/distro"
     fi
@@ -93,8 +93,18 @@ select_browser() {
     case "$browser_opt" in
         1|"") echo "zen" > "$STATE_DIR/browser"
              echo "${GREEN}Browser: Zen Browser${NC}" ;;
-        2) echo "helium" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Helium Browser${NC}" ;;
+        2) 
+            local distro=$(cat "$STATE_DIR/distro")
+            if [[ "$distro" == "almalinux" ]]; then
+                echo "${RED}Helium Browser não está disponível para AlmaLinux.${NC}"
+                sleep 2
+                select_browser
+                return
+            else
+                echo "helium" > "$STATE_DIR/browser"
+                echo "${GREEN}Browser: Helium Browser${NC}"
+            fi
+            ;;
         3) echo "firefox" > "$STATE_DIR/browser"
            echo "${GREEN}Browser: Firefox${NC}" ;;
         4) echo "chrome" > "$STATE_DIR/browser"
@@ -133,9 +143,10 @@ setup_sources() {
         sudo sed -i '/ILoveCandy/a ParallelDownloads = 15' /etc/pacman.conf
         echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
         sudo pacman -Syu --noconfirm
-    elif [[ "$distro" == "alma" ]]; then
-        sudo dnf install epel-release -y
-        sudo systemctl set-default graphical.target
+    elif [[ "$distro" == "almalinux" ]]; then
+        sudo dnf install -y epel-release
+        sudo dnf update -y
+        sudo dnf upgrade -y
     fi
 }
 
@@ -151,6 +162,10 @@ install_base() {
         sudo systemctl start apparmor
         sudo systemctl enable fwupd
         sudo systemctl start fwupd
+    elif [[ "$distro" == "almalinux" ]]; then
+        sudo dnf install -y podman neovim gamemode fastfetch
+        sudo systemctl enable firewalld
+        sudo systemctl start firewalld
     fi
 }
 
@@ -170,7 +185,7 @@ setup_package_managers() {
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
-    elif [[ "$distro" == "alma" ]]; then
+    elif [[ "$distro" == "almalinux" ]]; then
         sudo dnf install -y flatpak
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     fi
@@ -213,13 +228,10 @@ install_browser() {
                 flatpak install -y flathub com.google.Chrome
                 ;;
         esac
-    elif [[ "$distro" == "alma" ]]; then
+    elif [[ "$distro" == "almalinux" ]]; then
         case "$browser" in
             "zen")
                 flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                echo "${YELLOW}Helium Browser não está disponível para Alma Linux.${NC}"
                 ;;
             "firefox")
                 flatpak install -y flathub org.mozilla.firefox
@@ -228,6 +240,18 @@ install_browser() {
                 flatpak install -y flathub com.google.Chrome
                 ;;
         esac
+    fi
+}
+
+setup_network() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        sudo sed -i '/^allow-hotplug /s/^/#/' /etc/network/interfaces
+        sudo sed -i '/^iface .* inet /s/^/#/' /etc/network/interfaces
+        sudo sed -i '/^iface .* inet6 /s/^/#/' /etc/network/interfaces
+    else
+        echo "${YELLOW}setup_network: Esta função é exclusiva para Debian. Pulando...${NC}"
     fi
 }
 
@@ -244,16 +268,26 @@ swap-priority = 100
 EOF
         sudo systemctl daemon-reload
         sudo systemctl start systemd-zram-setup@zram0.service
+    else
+        echo "${YELLOW}setup_zram: Esta função é exclusiva para Debian. Pulando...${NC}"
     fi
 }
 
 setup_btrfs_compression() {
-    if mount | grep -q "btrfs"; then
-        sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
-        sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
-        sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
-        sudo mount -o remount /
-        echo "${GREEN}Compressão BTRFS configurada para zstd${NC}"
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        if mount | grep -q "btrfs"; then
+            sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
+            sudo mount -o remount /
+            echo "${GREEN}Compressão BTRFS configurada para zstd${NC}"
+        else
+            echo "${YELLOW}Sistema sem BTRFS. Pulando compressão.${NC}"
+        fi
+    else
+        echo "${YELLOW}setup_btrfs_compression: Esta função é exclusiva para Debian. Pulando...${NC}"
     fi
 }
 
@@ -316,6 +350,13 @@ install_gpu_drivers() {
                 sudo pacman -S --noconfirm nvidia-open
                 ;;
         esac
+    elif [[ "$distro" == "almalinux" ]]; then
+        case "$gpu" in
+            "nvidia")
+                sudo dnf install -y almalinux-release-nvidia-driver
+                sudo dnf install -y nvidia-driver
+                ;;
+        esac
     fi
 }
 
@@ -347,63 +388,28 @@ install_cpu_microcode() {
 select_desktop() {
     clear_screen
     show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
+    show_option "1" "GNOME"
+    show_option "2" "KDE Plasma"
+    show_option "3" "Nenhum"
     
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        show_option "1" "GNOME"
-        show_option "2" "KDE Plasma"
-        show_option "3" "Nenhum"
-    elif [[ "$distro" == "arch" ]]; then
-        show_option "1" "GNOME"
-        show_option "2" "KDE Plasma"
-        show_option "3" "Nenhum"
+    if [[ "$distro" == "arch" ]]; then
         show_option "4" "COSMIC"
         show_option "5" "Dank Linux"
-    elif [[ "$distro" == "alma" ]]; then
-        show_option "1" "Workstation (GNOME)"
-        show_option "2" "KDE Desktop"
     fi
     
     echo ""
-    
-    if [[ "$distro" == "alma" ]]; then
-        read -p "Opção [1-2]: " de_opt
-    else
-        read -p "Opção [1-3] (Enter para GNOME): " de_opt
-    fi
+    read -p "Opção [1-3] (Enter para GNOME): " de_opt
     
     case "$de_opt" in
-        1|"") 
-            if [[ "$distro" == "alma" ]]; then
-                echo "workstation" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: Workstation (GNOME)${NC}"
-            else
-                echo "gnome" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: GNOME${NC}"
-            fi
-            ;;
-        2)
-            if [[ "$distro" == "alma" ]]; then
-                echo "kde-desktop" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: KDE Desktop${NC}"
-            else
-                echo "kde" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: KDE Plasma${NC}"
-            fi
-            ;;
-        3)
-            if [[ "$distro" != "alma" ]]; then
-                echo "none" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: Nenhum${NC}"
-            else
-                echo "${RED}Opção inválida.${NC}"
-                sleep 1
-                select_desktop
-                return
-            fi
-            ;;
-        4)
+        1|"") echo "gnome" > "$STATE_DIR/desktop"
+             echo "${GREEN}Desktop: GNOME${NC}" ;;
+        2) echo "kde" > "$STATE_DIR/desktop"
+           echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
+        3) echo "none" > "$STATE_DIR/desktop"
+           echo "${GREEN}Desktop: Nenhum${NC}" ;;
+        4) 
             if [[ "$distro" == "arch" ]]; then
                 echo "cosmic" > "$STATE_DIR/desktop"
                 echo "${GREEN}Desktop: COSMIC${NC}"
@@ -462,7 +468,7 @@ install_desktop() {
                 sudo systemctl enable plasmalogin
                 ;;
             "cosmic")
-                sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers
+                sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk
                 sudo systemctl enable cosmic-greeter
                 ;;
             "dank")
@@ -472,25 +478,22 @@ install_desktop() {
                 echo "${YELLOW}Nenhum desktop instalado.${NC}"
                 ;;
         esac
-    elif [[ "$distro" == "alma" ]]; then
+    elif [[ "$distro" == "almalinux" ]]; then
         case "$desktop" in
-            "workstation")
-                sudo dnf group install -y "Workstation"
+            "gnome")
+                sudo dnf install -y gnome-initial-setup gnome-software gnome-tweaks gnome-disk-utility ptyxis
+                sudo systemctl enable gdm
+                sudo systemctl set-default graphical.target
                 ;;
-            "kde-desktop")
-                sudo dnf group install -y "KDE Desktop"
+            "kde")
+                sudo dnf install -y sddm plasma-desktop konsole dolphin
+                sudo systemctl enable sddm
+                sudo systemctl set-default graphical.target
+                ;;
+            "none")
+                echo "${YELLOW}Nenhum desktop instalado.${NC}"
                 ;;
         esac
-    fi
-}
-
-setup_network() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        sudo sed -i '/^allow-hotplug /s/^/#/' /etc/network/interfaces
-        sudo sed -i '/^iface .* inet /s/^/#/' /etc/network/interfaces
-        sudo sed -i '/^iface .* inet6 /s/^/#/' /etc/network/interfaces
     fi
 }
 
