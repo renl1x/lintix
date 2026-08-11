@@ -91,12 +91,6 @@ ask_extras() {
     echo " 16) Yay (AUR helper for Arch)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Yay: digite 16"
-    echo "  - WinBoat + Yay: digite 24"
-    echo "  - Todos: digite 31"
-    echo "  - Nenhum: digite 0"
-    echo ""
     read -p "Digite a soma das opções desejadas [0-31]: " extra_sum
     
     if [[ ! "$extra_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
@@ -146,13 +140,6 @@ ask_productivity() {
     echo " 16) Audacity (Edição de áudio)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas OnlyOffice: digite 1"
-    echo "  - OnlyOffice + OBS: digite 3"
-    echo "  - GIMP + Audacity: digite 24"
-    echo "  - Todos: digite 31"
-    echo "  - Nenhum: digite 0"
-    echo ""
     read -p "Digite a soma das opções desejadas [0-31]: " prod_sum
     
     if [[ ! "$prod_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
@@ -202,13 +189,6 @@ ask_games() {
     echo " 16) Ryujinx (Switch emulator)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Hydra: digite 1"
-    echo "  - Hydra + Sober: digite 3"
-    echo "  - shadPS4 + Ryujinx: digite 24"
-    echo "  - Todos: digite 31"
-    echo "  - Nenhum: digite 0"
-    echo ""
     read -p "Digite a soma das opções desejadas [0-31]: " games_sum
     
     if [[ ! "$games_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
@@ -257,13 +237,6 @@ ask_browser() {
     echo "  8) Google Chrome"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Firefox: digite 4"
-    echo "  - Firefox + Chrome: digite 12"
-    echo "  - Zen + Helium: digite 3"
-    echo "  - Todos: digite 15"
-    echo "  - Nenhum: digite 0"
-    echo ""
     read -p "Digite a soma das opções desejadas [0-15]: " browser_sum
     
     if [[ ! "$browser_sum" =~ ^[0-9]|1[0-5]$ ]]; then
@@ -716,7 +689,7 @@ select_desktop() {
     fi
     
     echo ""
-    read -p "Opção [1-3] (Enter para GNOME): " de_opt
+    read -p "Opção [1-5]: " de_opt
     
     case "$de_opt" in
         1|"") echo "gnome" > "$STATE_DIR/desktop"
