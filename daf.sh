@@ -1,14 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# =============================================================================
-# CONFIGURAÇÕES INICIAIS
-# =============================================================================
-
 STATE_DIR="/tmp/debian_install_state"
 mkdir -p "$STATE_DIR"
 
-# Cores para output
 if command -v tput >/dev/null 2>&1; then
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
@@ -21,10 +16,6 @@ if command -v tput >/dev/null 2>&1; then
 else
     RED=''; GREEN=''; YELLOW=''; BLUE=''; MAGENTA=''; CYAN=''; BOLD=''; NC=''
 fi
-
-# =============================================================================
-# FUNÇÕES AUXILIARES
-# =============================================================================
 
 confirm() {
     local prompt="$1"
@@ -52,10 +43,6 @@ show_option() {
     local desc="$2"
     echo "  ${CYAN}$num${NC}) $desc"
 }
-
-# =============================================================================
-# DETECÇÃO DE HARDWARE E SISTEMA
-# =============================================================================
 
 detect_distro() {
     if [ -f /etc/debian_version ]; then
@@ -93,10 +80,6 @@ detect_cpu() {
     fi
 }
 
-# =============================================================================
-# FUNÇÕES DE SELEÇÃO (INTERATIVAS)
-# =============================================================================
-
 select_desktop() {
     clear_screen
     show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
@@ -106,7 +89,6 @@ select_desktop() {
     
     local distro=$(cat "$STATE_DIR/distro")
     
-    # Opções exclusivas para Arch
     if [[ "$distro" == "arch" ]]; then
         show_option "4" "COSMIC"
         show_option "5" "Dank Linux"
@@ -189,16 +171,11 @@ select_browser() {
     sleep 1
 }
 
-# =============================================================================
-# CONFIGURAÇÃO DE REPOSITÓRIOS
-# =============================================================================
-
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
     case "$distro" in
         debian)
-            # Adiciona contrib e non-free ao Debian
             if [ -f /etc/apt/sources.list ]; then
                 sudo sed -i 's/\(main\)/\1 contrib non-free/g' /etc/apt/sources.list
             fi
@@ -212,14 +189,12 @@ setup_sources() {
             ;;
             
         arch)
-            # Configura Chaotic AUR para Arch
             sudo pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
             sudo pacman-key --lsign-key 3056513887B78AEB
             sudo pacman -U --noconfirm \
                 "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst" \
                 "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst"
             
-            # Configura pacman.conf
             sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
             sudo sed -i '/Color/a ILoveCandy' /etc/pacman.conf
             sudo sed -i '/^ParallelDownloads/d' /etc/pacman.conf
@@ -230,31 +205,23 @@ setup_sources() {
             ;;
             
         almalinux)
-            # Adiciona EPEL para AlmaLinux
             echo "${YELLOW}Adicionando EPEL...${NC}"
             sudo dnf install -y epel-release
             
-            # Adiciona RPM Fusion para AlmaLinux
             echo "${YELLOW}Adicionando RPM Fusion...${NC}"
             local rhel_version=$(rpm -E %rhel)
             sudo dnf install --nogpgcheck -y \
                 https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_version}.noarch.rpm \
                 https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${rhel_version}.noarch.rpm
             
-            # Habilita CRB (CodeReady Builder) para AlmaLinux
             echo "${YELLOW}Habilitando CRB (CodeReady Builder)...${NC}"
             sudo /usr/bin/crb enable
             
-            # Atualiza o sistema
             sudo dnf update -y
             sudo dnf upgrade -y
             ;;
     esac
 }
-
-# =============================================================================
-# INSTALAÇÃO DE PACOTES BASE
-# =============================================================================
 
 install_base() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -272,10 +239,6 @@ install_base() {
     esac
 }
 
-# =============================================================================
-# CONFIGURAÇÃO DE SEGURANÇA (FIREWALL E APPARMOR)
-# =============================================================================
-
 setup_security() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -285,20 +248,17 @@ setup_security() {
     
     case "$distro" in
         debian)
-            # UFW - Firewall para Debian
             echo "${YELLOW}Instalando e configurando UFW...${NC}"
             sudo apt install -y ufw
             sudo systemctl enable ufw
             sudo systemctl start ufw
             echo "${GREEN}✓ UFW instalado e habilitado${NC}"
             
-            # AppArmor - Já vem instalado no Debian, apenas garantimos que está ativo
             echo "${YELLOW}Verificando AppArmor...${NC}"
             sudo systemctl enable apparmor
             sudo systemctl start apparmor
             echo "${GREEN}✓ AppArmor habilitado${NC}"
             
-            # fwupd - Atualização de firmware
             echo "${YELLOW}Instalando fwupd...${NC}"
             sudo apt install -y fwupd
             sudo systemctl enable fwupd
@@ -307,21 +267,18 @@ setup_security() {
             ;;
             
         arch)
-            # UFW - Firewall para Arch
             echo "${YELLOW}Instalando e configurando UFW...${NC}"
             sudo pacman -S --noconfirm ufw
             sudo systemctl enable ufw
             sudo systemctl start ufw
             echo "${GREEN}✓ UFW instalado e habilitado${NC}"
             
-            # AppArmor
             echo "${YELLOW}Instalando e configurando AppArmor...${NC}"
             sudo pacman -S --noconfirm apparmor
             sudo systemctl enable apparmor
             sudo systemctl start apparmor
             echo "${GREEN}✓ AppArmor instalado e habilitado${NC}"
             
-            # fwupd - Atualização de firmware
             echo "${YELLOW}Instalando fwupd...${NC}"
             sudo pacman -S --noconfirm fwupd
             sudo systemctl enable fwupd
@@ -330,31 +287,24 @@ setup_security() {
             ;;
             
         almalinux)
-            # Firewalld - Firewall para AlmaLinux/RHEL
             echo "${YELLOW}Instalando e configurando Firewalld...${NC}"
             sudo dnf install -y firewalld
             sudo systemctl enable firewalld
             sudo systemctl start firewalld
             echo "${GREEN}✓ Firewalld instalado e habilitado${NC}"
             
-            # fwupd - Atualização de firmware
             echo "${YELLOW}Instalando fwupd...${NC}"
             sudo dnf install -y fwupd
             sudo systemctl enable fwupd
             sudo systemctl start fwupd
             echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
             
-            # Nota: AppArmor não é usado no AlmaLinux/RHEL (usa SELinux)
             echo "${YELLOW}ℹ AppArmor não é suportado no AlmaLinux (usa SELinux)${NC}"
             ;;
     esac
     
     echo ""
 }
-
-# =============================================================================
-# GERENCIADORES DE PACOTES (FLATPAK, ETC)
-# =============================================================================
 
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
@@ -381,10 +331,6 @@ setup_package_managers() {
             ;;
     esac
 }
-
-# =============================================================================
-# INSTALAÇÃO DE DESKTOP
-# =============================================================================
 
 install_desktop() {
     local desktop=$(cat "$STATE_DIR/desktop")
@@ -450,10 +396,6 @@ install_desktop() {
     esac
 }
 
-# =============================================================================
-# INSTALAÇÃO DE BROWSERS
-# =============================================================================
-
 install_browser() {
     local browser=$(cat "$STATE_DIR/browser")
     local distro=$(cat "$STATE_DIR/distro")
@@ -461,40 +403,56 @@ install_browser() {
     case "$distro" in
         debian)
             case "$browser" in
-                zen)     flatpak install -y flathub app.zen_browser.zen ;;
+                zen)
+                    flatpak install -y flathub app.zen_browser.zen
+                    ;;
                 helium)
                     curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
                     echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
                     sudo apt update
                     sudo apt install -y helium-bin
                     ;;
-                firefox) flatpak install -y flathub org.mozilla.firefox ;;
-                chrome)  flatpak install -y flathub com.google.Chrome ;;
+                firefox)
+                    flatpak install -y flathub org.mozilla.firefox
+                    ;;
+                chrome)
+                    flatpak install -y flathub com.google.Chrome
+                    ;;
             esac
             ;;
             
         arch)
             case "$browser" in
-                zen)     flatpak install -y flathub app.zen_browser.zen ;;
-                helium)  sudo pacman -S --noconfirm helium-browser-bin ;;
-                firefox) flatpak install -y flathub org.mozilla.firefox ;;
-                chrome)  flatpak install -y flathub com.google.Chrome ;;
+                zen)
+                    flatpak install -y flathub app.zen_browser.zen
+                    ;;
+                helium)
+                    sudo pacman -S --noconfirm helium-browser-bin
+                    ;;
+                firefox)
+                    flatpak install -y flathub org.mozilla.firefox
+                    ;;
+                chrome)
+                    flatpak install -y flathub com.google.Chrome
+                    ;;
             esac
             ;;
             
         almalinux)
             case "$browser" in
-                zen)     flatpak install -y flathub app.zen_browser.zen ;;
-                firefox) flatpak install -y flathub org.mozilla.firefox ;;
-                chrome)  flatpak install -y flathub com.google.Chrome ;;
+                zen)
+                    flatpak install -y flathub app.zen_browser.zen
+                    ;;
+                firefox)
+                    flatpak install -y flathub org.mozilla.firefox
+                    ;;
+                chrome)
+                    flatpak install -y flathub com.google.Chrome
+                    ;;
             esac
             ;;
     esac
 }
-
-# =============================================================================
-# CONFIGURAÇÕES ESPECÍFICAS DO DEBIAN
-# =============================================================================
 
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -544,10 +502,6 @@ setup_btrfs_compression() {
     fi
 }
 
-# =============================================================================
-# DRIVERS DE VÍDEO
-# =============================================================================
-
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
         echo "${YELLOW}mokutil não instalado. Pulando importação da chave MOK.${NC}"
@@ -579,37 +533,29 @@ import_mok_key() {
 install_nvidia_debian() {
     echo "${YELLOW}Instalando drivers NVIDIA no Debian...${NC}"
     
-    # Detecta a versão do Debian
-    if [ -f /etc/debian_version ]; then
-        local debian_version=$(cat /etc/debian_version | cut -d. -f1)
-        local distro_name=""
+    if [ -f /etc/os-release ]; then
+        source /etc/os-release
+        local distro_name="${VERSION_CODENAME:-}"
         
-        case "$debian_version" in
-            10) distro_name="buster" ;;
-            11) distro_name="bullseye" ;;
-            12) distro_name="bookworm" ;;
-            13) distro_name="trixie" ;;
-            14) distro_name="forky" ;;
-            *) distro_name="bookworm" ;;
-        esac
+        if [ -z "$distro_name" ]; then
+            echo "${RED}Erro: Não foi possível detectar o codinome do Debian a partir do /etc/os-release${NC}"
+            return 1
+        fi
         
-        echo "${YELLOW}Detectado Debian ${debian_version} (${distro_name})${NC}"
+        echo "${YELLOW}Detectado Debian ${VERSION_ID} (${distro_name})${NC}"
         
-        # Baixa e instala o keyring da NVIDIA
         wget https://developer.download.nvidia.com/compute/cuda/repos/${distro_name}/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt update
-        
-        # Instala o driver NVIDIA
         sudo apt -y install nvidia-open
         rm -f cuda-keyring_1.1-1_all.deb
         
         echo "${GREEN}✓ Drivers NVIDIA instalados com sucesso!${NC}"
         
-        # Importa a chave MOK se Secure Boot estiver ativo
         import_mok_key
     else
-        echo "${RED}Erro: Não foi possível detectar a versão do Debian${NC}"
+        echo "${RED}Erro: Arquivo /etc/os-release não encontrado${NC}"
+        return 1
     fi
 }
 
@@ -631,9 +577,15 @@ install_gpu_drivers() {
             
         arch)
             case "$gpu" in
-                intel)   sudo pacman -S --noconfirm vulkan-intel ;;
-                amd)     sudo pacman -S --noconfirm vulkan-radeon ;;
-                nvidia)  sudo pacman -S --noconfirm nvidia-open ;;
+                intel)
+                    sudo pacman -S --noconfirm vulkan-intel
+                    ;;
+                amd)
+                    sudo pacman -S --noconfirm vulkan-radeon
+                    ;;
+                nvidia)
+                    sudo pacman -S --noconfirm nvidia-open
+                    ;;
             esac
             ;;
             
@@ -651,10 +603,6 @@ install_gpu_drivers() {
     esac
 }
 
-# =============================================================================
-# MICROCÓDIGO DA CPU
-# =============================================================================
-
 install_cpu_microcode() {
     local cpu=$(cat "$STATE_DIR/cpu")
     local distro=$(cat "$STATE_DIR/distro")
@@ -662,14 +610,22 @@ install_cpu_microcode() {
     case "$distro" in
         debian)
             case "$cpu" in
-                intel) sudo apt install -y intel-microcode ;;
-                amd)   sudo apt install -y amd64-microcode ;;
+                intel)
+                    sudo apt install -y intel-microcode
+                    ;;
+                amd)
+                    sudo apt install -y amd64-microcode
+                    ;;
             esac
             ;;
         arch)
             case "$cpu" in
-                intel) sudo pacman -S --noconfirm intel-ucode ;;
-                amd)   sudo pacman -S --noconfirm amd-ucode ;;
+                intel)
+                    sudo pacman -S --noconfirm intel-ucode
+                    ;;
+                amd)
+                    sudo pacman -S --noconfirm amd-ucode
+                    ;;
             esac
             ;;
         almalinux)
@@ -677,10 +633,6 @@ install_cpu_microcode() {
             ;;
     esac
 }
-
-# =============================================================================
-# CONFIGURAÇÕES DE PERFORMANCE
-# =============================================================================
 
 setup_performance_vars() {
     sudo mkdir -p /etc/environment.d
@@ -690,10 +642,6 @@ __GL_SHADER_DISK_CACHE_SIZE=12000000000
 EOF
 }
 
-# =============================================================================
-# LIMPEZA DE PACOTES INDESEJADOS
-# =============================================================================
-
 remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -702,10 +650,6 @@ remove_packages() {
         sudo apt autoremove -y
     fi
 }
-
-# =============================================================================
-# REINICIALIZAÇÃO
-# =============================================================================
 
 ask_reboot() {
     echo ""
@@ -719,55 +663,26 @@ ask_reboot() {
     fi
 }
 
-# =============================================================================
-# FUNÇÃO PRINCIPAL
-# =============================================================================
-
 main() {
-    # 1. Detecção do sistema
     detect_distro
     detect_gpu
     detect_cpu
-    
-    # 2. Seleções interativas
     select_desktop
     select_browser
-    
-    # 3. Configuração de repositórios
     setup_sources
-    
-    # 4. Instalação base
     install_base
-    
-    # 5. Configuração de segurança (firewall + apparmor + fwupd)
     setup_security
-    
-    # 6. Microcódigo e drivers
     install_cpu_microcode
     install_gpu_drivers
-    
-    # 7. Desktop e browsers
     install_desktop
     install_browser
-    
-    # 8. Configurações específicas do Debian
     setup_network
     setup_zram
     setup_btrfs_compression
-    
-    # 9. Gerenciadores de pacotes
     setup_package_managers
-    
-    # 10. Configurações finais
     setup_performance_vars
     remove_packages
-    
-    # 11. Reinicialização
     ask_reboot
 }
-
-# =============================================================================
-# EXECUÇÃO
-# =============================================================================
 
 main
