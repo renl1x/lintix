@@ -83,82 +83,64 @@ detect_cpu() {
 select_desktop() {
     clear_screen
     show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
-    show_option "1" "GNOME"
-    show_option "2" "KDE Plasma"
-    show_option "3" "Nenhum"
     
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "arch" ]]; then
+    if [[ "$distro" == "debian" || "$distro" == "almalinux" ]]; then
+        show_option "1" "GNOME"
+        show_option "2" "KDE Plasma"
+        show_option "3" "Nenhum"
+        echo ""
+        read -p "Opção [1-3] (Enter para GNOME): " de_opt
+        
+        case "$de_opt" in
+            1|"") echo "gnome" > "$STATE_DIR/desktop"
+                 echo "${GREEN}Desktop: GNOME${NC}" ;;
+            2) echo "kde" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
+            3) echo "none" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: Nenhum${NC}" ;;
+            *) echo "${RED}Opção inválida.${NC}"
+               sleep 1
+               select_desktop
+               return
+        esac
+    elif [[ "$distro" == "arch" ]]; then
+        show_option "1" "GNOME"
+        show_option "2" "KDE Plasma"
+        show_option "3" "Nenhum"
         show_option "4" "COSMIC"
         show_option "5" "Dank Linux"
+        echo ""
+        read -p "Opção [1-5] (Enter para GNOME): " de_opt
+        
+        case "$de_opt" in
+            1|"") echo "gnome" > "$STATE_DIR/desktop"
+                 echo "${GREEN}Desktop: GNOME${NC}" ;;
+            2) echo "kde" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
+            3) echo "none" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: Nenhum${NC}" ;;
+            4) echo "cosmic" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: COSMIC${NC}" ;;
+            5) echo "dank" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: Dank Linux${NC}" ;;
+            *) echo "${RED}Opção inválida.${NC}"
+               sleep 1
+               select_desktop
+               return
+        esac
     fi
-    
-    echo ""
-    read -p "Opção [1-3] (Enter para GNOME): " de_opt
-    
-    case "$de_opt" in
-        1|"") echo "gnome" > "$STATE_DIR/desktop"
-             echo "${GREEN}Desktop: GNOME${NC}" ;;
-        2) echo "kde" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
-        3) echo "none" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: Nenhum${NC}" ;;
-        4) 
-            if [[ "$distro" == "arch" ]]; then
-                echo "cosmic" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: COSMIC${NC}"
-            else
-                echo "${RED}Opção inválida.${NC}"
-                sleep 1
-                select_desktop
-                return
-            fi
-            ;;
-        5)
-            if [[ "$distro" == "arch" ]]; then
-                echo "dank" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: Dank Linux${NC}"
-            else
-                echo "${RED}Opção inválida.${NC}"
-                sleep 1
-                select_desktop
-                return
-            fi
-            ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_desktop
-           return
-    esac
     sleep 2
 }
 
 select_browser() {
     clear_screen
     show_section "SELECIONE O BROWSER"
+    
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "almalinux" ]]; then
-        show_option "1" "Zen Browser (Flatpak)"
-        show_option "2" "Firefox (Flatpak)"
-        show_option "3" "Google Chrome (Flatpak)"
-        echo ""
-        read -p "Opção [1-3] (Enter para Zen Browser): " browser_opt
-        
-        case "$browser_opt" in
-            1|"") echo "zen" > "$STATE_DIR/browser"
-                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
-            2) echo "firefox" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Firefox${NC}" ;;
-            3) echo "chrome" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Google Chrome${NC}" ;;
-            *) echo "${RED}Opção inválida.${NC}"
-               sleep 1
-               select_browser
-               return
-        esac
-    else
+    if [[ "$distro" == "debian" || "$distro" == "arch" ]]; then
         show_option "1" "Zen Browser (Flatpak)"
         show_option "2" "Helium Browser"
         show_option "3" "Firefox (Flatpak)"
@@ -174,6 +156,25 @@ select_browser() {
             3) echo "firefox" > "$STATE_DIR/browser"
                echo "${GREEN}Browser: Firefox${NC}" ;;
             4) echo "chrome" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Google Chrome${NC}" ;;
+            *) echo "${RED}Opção inválida.${NC}"
+               sleep 1
+               select_browser
+               return
+        esac
+    elif [[ "$distro" == "almalinux" ]]; then
+        show_option "1" "Zen Browser (Flatpak)"
+        show_option "2" "Firefox (Flatpak)"
+        show_option "3" "Google Chrome (Flatpak)"
+        echo ""
+        read -p "Opção [1-3] (Enter para Zen Browser): " browser_opt
+        
+        case "$browser_opt" in
+            1|"") echo "zen" > "$STATE_DIR/browser"
+                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
+            2) echo "firefox" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Firefox${NC}" ;;
+            3) echo "chrome" > "$STATE_DIR/browser"
                echo "${GREEN}Browser: Google Chrome${NC}" ;;
             *) echo "${RED}Opção inválida.${NC}"
                sleep 1
