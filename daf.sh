@@ -247,22 +247,95 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman neovim ufw gamemode fastfetch
-            sudo systemctl enable ufw
+            sudo apt install -y podman neovim gamemode fastfetch
             ;;
         arch)
-            sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
-            sudo systemctl enable apparmor
-            sudo systemctl start apparmor
-            sudo systemctl enable fwupd
-            sudo systemctl start fwupd
+            sudo pacman -S --noconfirm podman neovim fastfetch gamemode
             ;;
         almalinux)
             sudo dnf install -y podman neovim gamemode fastfetch
-            sudo systemctl enable firewalld
-            sudo systemctl start firewalld
             ;;
     esac
+}
+
+# =============================================================================
+# CONFIGURAÇÃO DE SEGURANÇA (FIREWALL E APPARMOR)
+# =============================================================================
+
+setup_security() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Configurando Firewall e Segurança${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    case "$distro" in
+        debian)
+            # UFW - Firewall para Debian
+            echo "${YELLOW}Instalando e configurando UFW...${NC}"
+            sudo apt install -y ufw
+            sudo systemctl enable ufw
+            sudo systemctl start ufw
+            echo "${GREEN}✓ UFW instalado e habilitado${NC}"
+            
+            # AppArmor - Já vem instalado no Debian, apenas garantimos que está ativo
+            echo "${YELLOW}Verificando AppArmor...${NC}"
+            sudo systemctl enable apparmor
+            sudo systemctl start apparmor
+            echo "${GREEN}✓ AppArmor habilitado${NC}"
+            
+            # fwupd - Atualização de firmware
+            echo "${YELLOW}Instalando fwupd...${NC}"
+            sudo apt install -y fwupd
+            sudo systemctl enable fwupd
+            sudo systemctl start fwupd
+            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
+            ;;
+            
+        arch)
+            # UFW - Firewall para Arch
+            echo "${YELLOW}Instalando e configurando UFW...${NC}"
+            sudo pacman -S --noconfirm ufw
+            sudo systemctl enable ufw
+            sudo systemctl start ufw
+            echo "${GREEN}✓ UFW instalado e habilitado${NC}"
+            
+            # AppArmor
+            echo "${YELLOW}Instalando e configurando AppArmor...${NC}"
+            sudo pacman -S --noconfirm apparmor
+            sudo systemctl enable apparmor
+            sudo systemctl start apparmor
+            echo "${GREEN}✓ AppArmor instalado e habilitado${NC}"
+            
+            # fwupd - Atualização de firmware
+            echo "${YELLOW}Instalando fwupd...${NC}"
+            sudo pacman -S --noconfirm fwupd
+            sudo systemctl enable fwupd
+            sudo systemctl start fwupd
+            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
+            ;;
+            
+        almalinux)
+            # Firewalld - Firewall para AlmaLinux/RHEL
+            echo "${YELLOW}Instalando e configurando Firewalld...${NC}"
+            sudo dnf install -y firewalld
+            sudo systemctl enable firewalld
+            sudo systemctl start firewalld
+            echo "${GREEN}✓ Firewalld instalado e habilitado${NC}"
+            
+            # fwupd - Atualização de firmware
+            echo "${YELLOW}Instalando fwupd...${NC}"
+            sudo dnf install -y fwupd
+            sudo systemctl enable fwupd
+            sudo systemctl start fwupd
+            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
+            
+            # Nota: AppArmor não é usado no AlmaLinux/RHEL (usa SELinux)
+            echo "${YELLOW}ℹ AppArmor não é suportado no AlmaLinux (usa SELinux)${NC}"
+            ;;
+    esac
+    
+    echo ""
 }
 
 # =============================================================================
@@ -521,6 +594,9 @@ install_gpu_drivers() {
             
         almalinux)
             case "$gpu" in
+                intel|amd)
+                    sudo dnf install -y mesa-vulkan-drivers
+                    ;;
                 nvidia)
                     sudo dnf install -y almalinux-release-nvidia-driver
                     sudo dnf install -y nvidia-driver
@@ -550,6 +626,9 @@ install_cpu_microcode() {
                 intel) sudo pacman -S --noconfirm intel-ucode ;;
                 amd)   sudo pacman -S --noconfirm amd-ucode ;;
             esac
+            ;;
+        almalinux)
+            sudo dnf install -y microcode_ctl
             ;;
     esac
 }
@@ -614,26 +693,31 @@ main() {
     
     # 4. Instalação base
     install_base
+    
+    # 5. Configuração de segurança (firewall + apparmor + fwupd)
+    setup_security
+    
+    # 6. Microcódigo e drivers
     install_cpu_microcode
     install_gpu_drivers
     
-    # 5. Desktop e browsers
+    # 7. Desktop e browsers
     install_desktop
     install_browser
     
-    # 6. Configurações específicas do Debian
+    # 8. Configurações específicas do Debian
     setup_network
     setup_zram
     setup_btrfs_compression
     
-    # 7. Gerenciadores de pacotes
+    # 9. Gerenciadores de pacotes
     setup_package_managers
     
-    # 8. Configurações finais
+    # 10. Configurações finais
     setup_performance_vars
     remove_packages
     
-    # 9. Reinicialização
+    # 11. Reinicialização
     ask_reboot
 }
 
