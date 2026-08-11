@@ -247,7 +247,7 @@ select_repos() {
     echo "  Selecione os repositórios/gerenciadores que deseja instalar (escolha múltiplos):"
     echo ""
     show_option "1" "Yay (AUR helper - Arch)"
-    show_option "2" "Snap (Universal package manager - Debian/AlmaLinux)"
+    show_option "2" "Snap (Universal package manager - Debian)"
     show_option "3" "Pacstall (AUR-like for Debian)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
@@ -649,18 +649,14 @@ install_repos() {
                 fi
                 ;;
             snap)
-                if [[ "$distro" == "debian" || "$distro" == "almalinux" ]]; then
+                if [[ "$distro" == "debian" ]]; then
                     echo "${YELLOW}Instalando Snap...${NC}"
-                    if [[ "$distro" == "debian" ]]; then
-                        sudo apt install -y snapd
-                    elif [[ "$distro" == "almalinux" ]]; then
-                        sudo dnf install -y snapd
-                    fi
+                    sudo apt install -y snapd
                     sudo systemctl enable snapd
                     sudo systemctl start snapd
                     echo "${GREEN}✓ Snap instalado!${NC}"
                 else
-                    echo "${YELLOW}⚠ Snap não é necessário no Arch (já tem AUR). Pulando...${NC}"
+                    echo "${YELLOW}⚠ Snap está disponível apenas para Debian. Pulando...${NC}"
                 fi
                 ;;
             pacstall)
