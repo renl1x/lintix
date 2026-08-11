@@ -241,6 +241,37 @@ select_games() {
     sleep 1
 }
 
+select_repos() {
+    clear_screen
+    show_section "REPOSITÓRIOS OPCIONAIS"
+    echo "  Selecione os repositórios/gerenciadores que deseja instalar (escolha múltiplos):"
+    echo ""
+    show_option "1" "Yay (AUR helper - Arch)"
+    show_option "2" "Snap (Universal package manager - Debian/AlmaLinux)"
+    show_option "3" "Pacstall (AUR-like for Debian)"
+    echo ""
+    echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
+    read -p "Opções: " -a repos_opts
+    
+    if [[ ${#repos_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/repos"
+        echo "${GREEN}Nenhum repositório opcional selecionado.${NC}"
+    else
+        local repos_list=""
+        for opt in "${repos_opts[@]}"; do
+            case "$opt" in
+                1) repos_list="${repos_list} yay" ;;
+                2) repos_list="${repos_list} snap" ;;
+                3) repos_list="${repos_list} pacstall" ;;
+                *) echo "${RED}Opção inválida: $opt${NC}" ;;
+            esac
+        done
+        echo "$repos_list" > "$STATE_DIR/repos"
+        echo "${GREEN}Repositório(s) opcional(is) selecionado(s)!${NC}"
+    fi
+    sleep 1
+}
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -594,6 +625,59 @@ install_games() {
     echo ""
 }
 
+install_repos() {
+    local repos=$(cat "$STATE_DIR/repos")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$repos" == "none" ]]; then
+        return
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Instalando repositórios opcionais${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    for repo in $repos; do
+        case "$repo" in
+            yay)
+                if [[ "$distro" == "arch" ]]; then
+                    echo "${YELLOW}Instalando Yay (AUR helper)...${NC}"
+                    sudo pacman -S --noconfirm yay
+                    echo "${GREEN}✓ Yay instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Yay é exclusivo para Arch Linux. Pulando...${NC}"
+                fi
+                ;;
+            snap)
+                if [[ "$distro" == "debian" || "$distro" == "almalinux" ]]; then
+                    echo "${YELLOW}Instalando Snap...${NC}"
+                    if [[ "$distro" == "debian" ]]; then
+                        sudo apt install -y snapd
+                    elif [[ "$distro" == "almalinux" ]]; then
+                        sudo dnf install -y snapd
+                    fi
+                    sudo systemctl enable snapd
+                    sudo systemctl start snapd
+                    echo "${GREEN}✓ Snap instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Snap não é necessário no Arch (já tem AUR). Pulando...${NC}"
+                fi
+                ;;
+            pacstall)
+                if [[ "$distro" == "debian" ]]; then
+                    echo "${YELLOW}Instalando Pacstall...${NC}"
+                    sudo bash -c "$(curl -fsSL https://pacstall.dev/q/install)"
+                    echo "${GREEN}✓ Pacstall instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Pacstall é exclusivo para Debian. Pulando...${NC}"
+                fi
+                ;;
+        esac
+    done
+    
+    echo ""
+}
+
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -811,6 +895,7 @@ main() {
     select_browser
     select_office
     select_games
+    select_repos
     setup_sources
     install_base
     setup_security
@@ -820,6 +905,7 @@ main() {
     install_browser
     install_office
     install_games
+    install_repos
     setup_network
     setup_zram
     setup_btrfs_compression
