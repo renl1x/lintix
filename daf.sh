@@ -912,6 +912,7 @@ main() {
     install_cpu_microcode
     install_gpu_drivers
     install_desktop
+    setup_package_managers
     install_browser
     install_office
     install_games
@@ -919,7 +920,6 @@ main() {
     setup_network
     setup_zram
     setup_btrfs_compression
-    setup_package_managers
     setup_performance_vars
     remove_packages
     ask_reboot
