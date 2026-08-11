@@ -133,6 +133,28 @@ ask_extras() {
     sleep 2
 }
 
+ask_flatpak_base() {
+    clear_screen
+    show_section "FLATPAK BASE - INSTALAÇÃO AUTOMÁTICA"
+    echo "${YELLOW}Deseja instalar os aplicativos base do Flatpak?${NC}"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  Steam (Game store/launcher)"
+    echo "  ProtonPlus (Proton manager)"
+    echo "  Prism Launcher (Minecraft launcher)"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    if confirm "Instalar Flatpak Base?"; then
+        echo "1" > "$STATE_DIR/flatpak_base"
+        echo "${GREEN}Flatpak Base ativado!${NC}"
+    else
+        echo "0" > "$STATE_DIR/flatpak_base"
+        echo "${YELLOW}Flatpak Base desativado.${NC}"
+    fi
+    sleep 2
+}
+
 ask_productivity() {
     clear_screen
     show_section "PRODUTIVIDADE - SELEÇÃO INDIVIDUAL"
@@ -349,6 +371,20 @@ setup_package_managers() {
             sudo pacman -S --noconfirm yay
         fi
     fi
+}
+
+install_flatpak_base() {
+    local flatpak_base=$(cat "$STATE_DIR/flatpak_base")
+    
+    if [[ "$flatpak_base" != "1" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando Flatpak Base...${NC}"
+    flatpak install -y flathub com.valvesoftware.Steam
+    flatpak install -y flathub com.vysp3r.ProtonPlus
+    flatpak install -y flathub org.prismlauncher.PrismLauncher
+    echo "${GREEN}Flatpak Base instalado com sucesso!${NC}"
 }
 
 install_waydroid() {
@@ -804,6 +840,7 @@ main() {
     detect_cpu
     select_desktop
     ask_extras
+    ask_flatpak_base
     ask_productivity
     ask_games
     select_browser
@@ -817,6 +854,7 @@ main() {
     setup_zram
     setup_btrfs_compression
     setup_package_managers
+    install_flatpak_base
     install_waydroid
     install_winboat
     install_nix
