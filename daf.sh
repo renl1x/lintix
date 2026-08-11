@@ -78,6 +78,23 @@ detect_cpu() {
     fi
 }
 
+ask_extra_repos() {
+    echo ""
+    echo "${YELLOW}Deseja ativar repositórios extras?${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  Debian: snapd + pacstall"
+    echo "  Arch:   yay (AUR helper)"
+    echo ""
+    if confirm "Ativar repositórios extras?"; then
+        echo "1" > "$STATE_DIR/extra_repos"
+        echo "${GREEN}Repositórios extras ativados!${NC}"
+    else
+        echo "0" > "$STATE_DIR/extra_repos"
+        echo "${YELLOW}Repositórios extras desativados.${NC}"
+    fi
+    sleep 1
+}
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -111,12 +128,10 @@ install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y podman neovim ufw gamemode fastfetch chrony
+        sudo apt install -y podman neovim ufw gamemode fastfetch
         sudo systemctl enable ufw
-        sudo systemctl enable chrony
-        sudo systemctl start chrony
     elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm apparmor podman fastfetch gamemode yay topgrade fwupd
+        sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
         sudo systemctl enable apparmor
         sudo systemctl start apparmor
         sudo systemctl enable fwupd
@@ -127,6 +142,7 @@ install_base() {
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
+    local extra_repos=$(cat "$STATE_DIR/extra_repos")
     
     if [[ "$distro" == "debian" ]]; then
         sudo apt install -y flatpak
@@ -138,8 +154,19 @@ setup_package_managers() {
         fi
         
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+        
+        if [[ "$extra_repos" == "1" ]]; then
+            sudo apt install -y snapd
+            sudo systemctl enable snapd
+            sudo systemctl start snapd
+            sudo bash -c "$(curl -fsSL https://pacstall.dev/q/install)"
+        fi
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
+        
+        if [[ "$extra_repos" == "1" ]]; then
+            sudo pacman -S --noconfirm yay
+        fi
     fi
 }
 
@@ -396,6 +423,7 @@ main() {
     detect_gpu
     detect_cpu
     select_desktop
+    ask_extra_repos
     setup_sources
     install_base
     install_cpu_microcode
