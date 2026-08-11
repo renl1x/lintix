@@ -162,15 +162,34 @@ install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y podman neovim ufw gamemode fastfetch
-        sudo systemctl enable ufw
+        sudo apt install -y podman neovim gamemode fastfetch
     elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
+        sudo pacman -S --noconfirm podman neovim fastfetch gamemode
+    fi
+}
+
+setup_security() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    echo "${GREEN}Configurando ferramentas de segurança...${NC}"
+    
+    if [[ "$distro" == "debian" ]]; then
+        sudo apt install -y ufw apparmor
+        sudo systemctl enable ufw
+        sudo systemctl start ufw
+        sudo systemctl enable apparmor
+        sudo systemctl start apparmor
+    elif [[ "$distro" == "arch" ]]; then
+        sudo pacman -S --noconfirm ufw apparmor fwupd
+        sudo systemctl enable ufw
+        sudo systemctl start ufw
         sudo systemctl enable apparmor
         sudo systemctl start apparmor
         sudo systemctl enable fwupd
         sudo systemctl start fwupd
     fi
+    
+    echo "${GREEN}Ferramentas de segurança configuradas!${NC}"
 }
 
 setup_package_managers() {
@@ -546,6 +565,7 @@ main() {
     select_browser
     setup_sources
     install_base
+    setup_security
     install_cpu_microcode
     install_gpu_drivers
     install_desktop
