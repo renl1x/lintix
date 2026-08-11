@@ -245,6 +245,58 @@ ask_games() {
     sleep 2
 }
 
+ask_browser() {
+    clear_screen
+    show_section "BROWSERS - SELEÇÃO INDIVIDUAL"
+    echo "${YELLOW}Digite a soma dos números dos browsers que deseja instalar:${NC}"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  1) Zen Browser"
+    echo "  2) Helium Browser"
+    echo "  4) Firefox"
+    echo "  8) Google Chrome"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${YELLOW}Exemplos:${NC}"
+    echo "  - Apenas Firefox: digite 4"
+    echo "  - Firefox + Chrome: digite 12"
+    echo "  - Zen + Helium: digite 3"
+    echo "  - Todos: digite 15"
+    echo "  - Nenhum: digite 0"
+    echo ""
+    read -p "Digite a soma das opções desejadas [0-15]: " browser_sum
+    
+    if [[ ! "$browser_sum" =~ ^[0-9]|1[0-5]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 15.${NC}"
+        sleep 2
+        ask_browser
+        return
+    fi
+    
+    echo "$browser_sum" > "$STATE_DIR/browser_sum"
+    
+    echo ""
+    echo "${GREEN}Browsers selecionados:${NC}"
+    if [[ "$browser_sum" == "0" ]]; then
+        echo "  ${YELLOW}Nenhum browser selecionado${NC}"
+    else
+        if [[ $((browser_sum & 1)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Zen Browser${NC}"
+        fi
+        if [[ $((browser_sum & 2)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Helium Browser${NC}"
+        fi
+        if [[ $((browser_sum & 4)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Firefox${NC}"
+        fi
+        if [[ $((browser_sum & 8)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Google Chrome${NC}"
+        fi
+    fi
+    echo ""
+    sleep 2
+}
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -496,6 +548,46 @@ install_games() {
     echo "${GREEN}Jogos e launchers instalados com sucesso!${NC}"
 }
 
+install_browsers() {
+    local browser_sum=$(cat "$STATE_DIR/browser_sum")
+    
+    if [[ "$browser_sum" == "0" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando browsers...${NC}"
+    
+    if [[ $((browser_sum & 1)) -ne 0 ]]; then
+        echo "Instalando Zen Browser..."
+        flatpak install -y flathub app.zen_browser.zen
+    fi
+    
+    if [[ $((browser_sum & 2)) -ne 0 ]]; then
+        echo "Instalando Helium Browser..."
+        local distro=$(cat "$STATE_DIR/distro")
+        if [[ "$distro" == "debian" ]]; then
+            curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+            echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+            sudo apt update
+            sudo apt install -y helium-bin
+        elif [[ "$distro" == "arch" ]]; then
+            sudo pacman -S --noconfirm helium-browser-bin
+        fi
+    fi
+    
+    if [[ $((browser_sum & 4)) -ne 0 ]]; then
+        echo "Instalando Firefox..."
+        flatpak install -y flathub org.mozilla.firefox
+    fi
+    
+    if [[ $((browser_sum & 8)) -ne 0 ]]; then
+        echo "Instalando Google Chrome..."
+        flatpak install -y flathub com.google.Chrome
+    fi
+    
+    echo "${GREEN}Browsers instalados com sucesso!${NC}"
+}
+
 setup_zram() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -607,27 +699,6 @@ install_cpu_microcode() {
                 ;;
         esac
     fi
-}
-
-select_browser() {
-    clear_screen
-    show_section "SELECIONE O BROWSER"
-    show_option "1" "Zen Browser (Flatpak)"
-    show_option "2" "Helium Browser"
-    echo ""
-    read -p "Opção [1-2] (Enter para Zen Browser): " browser_opt
-    
-    case "$browser_opt" in
-        1|"") echo "zen" > "$STATE_DIR/browser"
-             echo "${GREEN}Browser: Zen Browser${NC}" ;;
-        2) echo "helium" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Helium Browser${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_browser
-           return
-    esac
-    sleep 1
 }
 
 select_desktop() {
@@ -753,34 +824,6 @@ remove_packages() {
     fi
 }
 
-install_browser() {
-    local browser=$(cat "$STATE_DIR/browser")
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-                sudo apt update
-                sudo apt install -y helium-bin
-                ;;
-        esac
-    elif [[ "$distro" == "arch" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                sudo pacman -S --noconfirm helium-browser-bin
-                ;;
-        esac
-    fi
-}
-
 ask_reboot() {
     echo ""
     echo "${GREEN}Instalação concluída com sucesso!${NC}"
@@ -801,7 +844,7 @@ main() {
     ask_extras
     ask_productivity
     ask_games
-    select_browser
+    ask_browser
     setup_sources
     install_base
     setup_security
@@ -817,7 +860,7 @@ main() {
     install_winboat
     install_productivity
     install_games
-    install_browser
+    install_browsers
     setup_performance_vars
     remove_packages
     ask_reboot
