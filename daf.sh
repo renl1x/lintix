@@ -181,27 +181,26 @@ select_office() {
     show_option "3" "Kdenlive (Editor de vídeo)"
     show_option "4" "OBS Studio (Gravação/Streaming)"
     show_option "5" "Obsidian (Notas/Knowledge base)"
-    show_option "6" "Instalar todos"
-    show_option "7" "Nenhum"
     echo ""
-    read -p "Opção [1-7] (Enter para Nenhum): " office_opt
+    echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
+    read -p "Opções: " -a office_opts
     
-    case "$office_opt" in
-        1) echo "onlyoffice" > "$STATE_DIR/office" ;;
-        2) echo "gimp" > "$STATE_DIR/office" ;;
-        3) echo "kdenlive" > "$STATE_DIR/office" ;;
-        4) echo "obs" > "$STATE_DIR/office" ;;
-        5) echo "obsidian" > "$STATE_DIR/office" ;;
-        6) echo "all" > "$STATE_DIR/office" ;;
-        7|"") echo "none" > "$STATE_DIR/office"
-             echo "${GREEN}Nenhum aplicativo office selecionado.${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_office
-           return
-    esac
-    
-    if [[ "$office_opt" != "7" && "$office_opt" != "" ]]; then
+    if [[ ${#office_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/office"
+        echo "${GREEN}Nenhum aplicativo office selecionado.${NC}"
+    else
+        local office_list=""
+        for opt in "${office_opts[@]}"; do
+            case "$opt" in
+                1) office_list="${office_list} onlyoffice" ;;
+                2) office_list="${office_list} gimp" ;;
+                3) office_list="${office_list} kdenlive" ;;
+                4) office_list="${office_list} obs" ;;
+                5) office_list="${office_list} obsidian" ;;
+                *) echo "${RED}Opção inválida: $opt${NC}" ;;
+            esac
+        done
+        echo "$office_list" > "$STATE_DIR/office"
         echo "${GREEN}Aplicativo(s) office selecionado(s)!${NC}"
     fi
     sleep 1
@@ -217,27 +216,26 @@ select_games() {
     show_option "3" "Prism Launcher (Minecraft)"
     show_option "4" "Sober (Roblox)"
     show_option "5" "Faugus Launcher"
-    show_option "6" "Instalar todos"
-    show_option "7" "Nenhum"
     echo ""
-    read -p "Opção [1-7] (Enter para Nenhum): " games_opt
+    echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
+    read -p "Opções: " -a games_opts
     
-    case "$games_opt" in
-        1) echo "steam" > "$STATE_DIR/games" ;;
-        2) echo "proton" > "$STATE_DIR/games" ;;
-        3) echo "prism" > "$STATE_DIR/games" ;;
-        4) echo "sober" > "$STATE_DIR/games" ;;
-        5) echo "faugus" > "$STATE_DIR/games" ;;
-        6) echo "all" > "$STATE_DIR/games" ;;
-        7|"") echo "none" > "$STATE_DIR/games"
-             echo "${GREEN}Nenhum jogo selecionado.${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_games
-           return
-    esac
-    
-    if [[ "$games_opt" != "7" && "$games_opt" != "" ]]; then
+    if [[ ${#games_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/games"
+        echo "${GREEN}Nenhum jogo selecionado.${NC}"
+    else
+        local games_list=""
+        for opt in "${games_opts[@]}"; do
+            case "$opt" in
+                1) games_list="${games_list} steam" ;;
+                2) games_list="${games_list} proton" ;;
+                3) games_list="${games_list} prism" ;;
+                4) games_list="${games_list} sober" ;;
+                5) games_list="${games_list} faugus" ;;
+                *) echo "${RED}Opção inválida: $opt${NC}" ;;
+            esac
+        done
+        echo "$games_list" > "$STATE_DIR/games"
         echo "${GREEN}Jogo(s) selecionado(s)!${NC}"
     fi
     sleep 1
@@ -537,30 +535,25 @@ install_office() {
     echo "${GREEN}► Instalando aplicativos Office${NC}"
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
-    case "$office" in
-        onlyoffice)
-            flatpak install -y flathub org.onlyoffice.desktopeditors
-            ;;
-        gimp)
-            flatpak install -y flathub org.gimp.GIMP
-            ;;
-        kdenlive)
-            flatpak install -y flathub org.kde.kdenlive
-            ;;
-        obs)
-            flatpak install -y flathub com.obsproject.Studio
-            ;;
-        obsidian)
-            flatpak install -y flathub md.obsidian.Obsidian
-            ;;
-        all)
-            flatpak install -y flathub org.onlyoffice.desktopeditors
-            flatpak install -y flathub org.gimp.GIMP
-            flatpak install -y flathub org.kde.kdenlive
-            flatpak install -y flathub com.obsproject.Studio
-            flatpak install -y flathub md.obsidian.Obsidian
-            ;;
-    esac
+    for app in $office; do
+        case "$app" in
+            onlyoffice)
+                flatpak install -y flathub org.onlyoffice.desktopeditors
+                ;;
+            gimp)
+                flatpak install -y flathub org.gimp.GIMP
+                ;;
+            kdenlive)
+                flatpak install -y flathub org.kde.kdenlive
+                ;;
+            obs)
+                flatpak install -y flathub com.obsproject.Studio
+                ;;
+            obsidian)
+                flatpak install -y flathub md.obsidian.Obsidian
+                ;;
+        esac
+    done
     
     echo "${GREEN}✓ Aplicativos office instalados!${NC}"
     echo ""
@@ -577,30 +570,25 @@ install_games() {
     echo "${GREEN}► Instalando jogos e plataformas${NC}"
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
-    case "$games" in
-        steam)
-            flatpak install -y flathub com.valvesoftware.Steam
-            ;;
-        proton)
-            flatpak install -y flathub net.davidotek.pupgui2
-            ;;
-        prism)
-            flatpak install -y flathub org.prismlauncher.PrismLauncher
-            ;;
-        sober)
-            flatpak install -y flathub org.vinegarhq.Sober
-            ;;
-        faugus)
-            flatpak install -y flathub io.github.Faugus.faugus-launcher
-            ;;
-        all)
-            flatpak install -y flathub com.valvesoftware.Steam
-            flatpak install -y flathub net.davidotek.pupgui2
-            flatpak install -y flathub org.prismlauncher.PrismLauncher
-            flatpak install -y flathub org.vinegarhq.Sober
-            flatpak install -y flathub io.github.Faugus.faugus-launcher
-            ;;
-    esac
+    for app in $games; do
+        case "$app" in
+            steam)
+                flatpak install -y flathub com.valvesoftware.Steam
+                ;;
+            proton)
+                flatpak install -y flathub net.davidotek.pupgui2
+                ;;
+            prism)
+                flatpak install -y flathub org.prismlauncher.PrismLauncher
+                ;;
+            sober)
+                flatpak install -y flathub org.vinegarhq.Sober
+                ;;
+            faugus)
+                flatpak install -y flathub io.github.Faugus.faugus-launcher
+                ;;
+        esac
+    done
     
     echo "${GREEN}✓ Jogos e plataformas instalados!${NC}"
     echo ""
