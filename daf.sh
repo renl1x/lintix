@@ -435,14 +435,15 @@ setup_package_managers() {
                 sudo apt install -y plasma-discover-backend-flatpak
             fi
             
-            sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
             ;;
         arch)
             sudo pacman -S --noconfirm flatpak
+            flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
             ;;
         almalinux)
             sudo dnf install -y flatpak
-            sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
             ;;
     esac
 }
@@ -519,7 +520,7 @@ install_browser() {
         debian)
             case "$browser" in
                 zen)
-                    flatpak install -y flathub app.zen_browser.zen
+                    flatpak install --user -y flathub app.zen_browser.zen
                     ;;
                 helium)
                     curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
@@ -528,10 +529,10 @@ install_browser() {
                     sudo apt install -y helium-bin
                     ;;
                 firefox)
-                    flatpak install -y flathub org.mozilla.firefox
+                    flatpak install --user -y flathub org.mozilla.firefox
                     ;;
                 chrome)
-                    flatpak install -y flathub com.google.Chrome
+                    flatpak install --user -y flathub com.google.Chrome
                     ;;
             esac
             ;;
@@ -539,16 +540,16 @@ install_browser() {
         arch)
             case "$browser" in
                 zen)
-                    flatpak install -y flathub app.zen_browser.zen
+                    flatpak install --user -y flathub app.zen_browser.zen
                     ;;
                 helium)
                     sudo pacman -S --noconfirm helium-browser-bin
                     ;;
                 firefox)
-                    flatpak install -y flathub org.mozilla.firefox
+                    flatpak install --user -y flathub org.mozilla.firefox
                     ;;
                 chrome)
-                    flatpak install -y flathub com.google.Chrome
+                    flatpak install --user -y flathub com.google.Chrome
                     ;;
             esac
             ;;
@@ -556,13 +557,13 @@ install_browser() {
         almalinux)
             case "$browser" in
                 zen)
-                    flatpak install -y flathub app.zen_browser.zen
+                    flatpak install --user -y flathub app.zen_browser.zen
                     ;;
                 firefox)
-                    flatpak install -y flathub org.mozilla.firefox
+                    flatpak install --user -y flathub org.mozilla.firefox
                     ;;
                 chrome)
-                    flatpak install -y flathub com.google.Chrome
+                    flatpak install --user -y flathub com.google.Chrome
                     ;;
             esac
             ;;
@@ -583,19 +584,19 @@ install_office() {
     for app in $office; do
         case "$app" in
             onlyoffice)
-                flatpak install -y flathub org.onlyoffice.desktopeditors
+                flatpak install --user -y flathub org.onlyoffice.desktopeditors
                 ;;
             gimp)
-                flatpak install -y flathub org.gimp.GIMP
+                flatpak install --user -y flathub org.gimp.GIMP
                 ;;
             kdenlive)
-                flatpak install -y flathub org.kde.kdenlive
+                flatpak install --user -y flathub org.kde.kdenlive
                 ;;
             obs)
-                flatpak install -y flathub com.obsproject.Studio
+                flatpak install --user -y flathub com.obsproject.Studio
                 ;;
             obsidian)
-                flatpak install -y flathub md.obsidian.Obsidian
+                flatpak install --user -y flathub md.obsidian.Obsidian
                 ;;
         esac
     done
@@ -618,19 +619,19 @@ install_games() {
     for app in $games; do
         case "$app" in
             steam)
-                flatpak install -y flathub com.valvesoftware.Steam
+                flatpak install --user -y flathub com.valvesoftware.Steam
                 ;;
             proton)
-                flatpak install -y flathub net.davidotek.pupgui2
+                flatpak install --user -y flathub net.davidotek.pupgui2
                 ;;
             prism)
-                flatpak install -y flathub org.prismlauncher.PrismLauncher
+                flatpak install --user -y flathub org.prismlauncher.PrismLauncher
                 ;;
             sober)
-                flatpak install -y flathub org.vinegarhq.Sober
+                flatpak install --user -y flathub org.vinegarhq.Sober
                 ;;
             faugus)
-                flatpak install -y flathub io.github.Faugus.faugus-launcher
+                flatpak install --user -y flathub io.github.Faugus.faugus-launcher
                 ;;
         esac
     done
