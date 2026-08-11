@@ -78,196 +78,31 @@ detect_cpu() {
     fi
 }
 
-ask_extras() {
+select_browser() {
     clear_screen
-    show_section "EXTRAS - SELEÇÃO INDIVIDUAL"
-    echo "${YELLOW}Digite a soma dos números dos extras que deseja instalar:${NC}"
+    show_section "SELECIONE O BROWSER"
+    show_option "1" "Zen Browser (Flatpak)"
+    show_option "2" "Helium Browser"
+    show_option "3" "Firefox (Flatpak)"
+    show_option "4" "Google Chrome (Flatpak)"
     echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  1) Snapd (Snap packages)"
-    echo "  2) Pacstall (AUR-style package manager for Debian)"
-    echo "  4) Waydroid (Container Android)"
-    echo "  8) WinBoat (Windows emulator)"
-    echo " 16) Yay (AUR helper for Arch)"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    read -p "Digite a soma das opções desejadas [0-31]: " extra_sum
+    read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
     
-    if [[ ! "$extra_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
-        sleep 2
-        ask_extras
-        return
-    fi
-    
-    echo "$extra_sum" > "$STATE_DIR/extras_sum"
-    
-    echo ""
-    echo "${GREEN}Opções selecionadas:${NC}"
-    if [[ "$extra_sum" == "0" ]]; then
-        echo "  ${YELLOW}Nenhum extra selecionado${NC}"
-    else
-        if [[ $((extra_sum & 1)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Snapd${NC}"
-        fi
-        if [[ $((extra_sum & 2)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Pacstall${NC}"
-        fi
-        if [[ $((extra_sum & 4)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Waydroid${NC}"
-        fi
-        if [[ $((extra_sum & 8)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ WinBoat${NC}"
-        fi
-        if [[ $((extra_sum & 16)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Yay${NC}"
-        fi
-    fi
-    echo ""
-    sleep 2
-}
-
-ask_productivity() {
-    clear_screen
-    show_section "PRODUTIVIDADE - SELEÇÃO INDIVIDUAL"
-    echo "${YELLOW}Digite a soma dos números dos aplicativos que deseja instalar:${NC}"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  1) OnlyOffice (Suite de escritório)"
-    echo "  2) OBS Studio (Gravação/transmissão de tela)"
-    echo "  4) Obsidian (Notas e conhecimento)"
-    echo "  8) GIMP (Edição de imagens)"
-    echo " 16) Audacity (Edição de áudio)"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    read -p "Digite a soma das opções desejadas [0-31]: " prod_sum
-    
-    if [[ ! "$prod_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
-        sleep 2
-        ask_productivity
-        return
-    fi
-    
-    echo "$prod_sum" > "$STATE_DIR/productivity_sum"
-    
-    echo ""
-    echo "${GREEN}Aplicativos selecionados:${NC}"
-    if [[ "$prod_sum" == "0" ]]; then
-        echo "  ${YELLOW}Nenhum aplicativo selecionado${NC}"
-    else
-        if [[ $((prod_sum & 1)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ OnlyOffice${NC}"
-        fi
-        if [[ $((prod_sum & 2)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ OBS Studio${NC}"
-        fi
-        if [[ $((prod_sum & 4)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Obsidian${NC}"
-        fi
-        if [[ $((prod_sum & 8)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ GIMP${NC}"
-        fi
-        if [[ $((prod_sum & 16)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Audacity${NC}"
-        fi
-    fi
-    echo ""
-    sleep 2
-}
-
-ask_games() {
-    clear_screen
-    show_section "GAMES - SELEÇÃO INDIVIDUAL"
-    echo "${YELLOW}Digite a soma dos números dos jogos/launchers que deseja instalar:${NC}"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  1) Hydra Launcher (Game launcher)"
-    echo "  2) Sober (Roblox client)"
-    echo "  4) Faugus Launcher (Wine/Proton games)"
-    echo "  8) shadPS4 (PS4 emulator)"
-    echo " 16) Ryujinx (Switch emulator)"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    read -p "Digite a soma das opções desejadas [0-31]: " games_sum
-    
-    if [[ ! "$games_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
-        sleep 2
-        ask_games
-        return
-    fi
-    
-    echo "$games_sum" > "$STATE_DIR/games_sum"
-    
-    echo ""
-    echo "${GREEN}Jogos/Launchers selecionados:${NC}"
-    if [[ "$games_sum" == "0" ]]; then
-        echo "  ${YELLOW}Nenhum jogo/launcher selecionado${NC}"
-    else
-        if [[ $((games_sum & 1)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Hydra Launcher${NC}"
-        fi
-        if [[ $((games_sum & 2)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Sober${NC}"
-        fi
-        if [[ $((games_sum & 4)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Faugus Launcher${NC}"
-        fi
-        if [[ $((games_sum & 8)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ shadPS4${NC}"
-        fi
-        if [[ $((games_sum & 16)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Ryujinx${NC}"
-        fi
-    fi
-    echo ""
-    sleep 2
-}
-
-ask_browser() {
-    clear_screen
-    show_section "BROWSERS - SELEÇÃO INDIVIDUAL"
-    echo "${YELLOW}Digite a soma dos números dos browsers que deseja instalar:${NC}"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "  1) Zen Browser"
-    echo "  2) Helium Browser"
-    echo "  4) Firefox"
-    echo "  8) Google Chrome"
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    read -p "Digite a soma das opções desejadas [0-15]: " browser_sum
-    
-    if [[ ! "$browser_sum" =~ ^[0-9]|1[0-5]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 15.${NC}"
-        sleep 2
-        ask_browser
-        return
-    fi
-    
-    echo "$browser_sum" > "$STATE_DIR/browser_sum"
-    
-    echo ""
-    echo "${GREEN}Browsers selecionados:${NC}"
-    if [[ "$browser_sum" == "0" ]]; then
-        echo "  ${YELLOW}Nenhum browser selecionado${NC}"
-    else
-        if [[ $((browser_sum & 1)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Zen Browser${NC}"
-        fi
-        if [[ $((browser_sum & 2)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Helium Browser${NC}"
-        fi
-        if [[ $((browser_sum & 4)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Firefox${NC}"
-        fi
-        if [[ $((browser_sum & 8)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Google Chrome${NC}"
-        fi
-    fi
-    echo ""
-    sleep 2
+    case "$browser_opt" in
+        1|"") echo "zen" > "$STATE_DIR/browser"
+             echo "${GREEN}Browser: Zen Browser${NC}" ;;
+        2) echo "helium" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Helium Browser${NC}" ;;
+        3) echo "firefox" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Firefox${NC}" ;;
+        4) echo "chrome" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Google Chrome${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_browser
+           return
+    esac
+    sleep 1
 }
 
 setup_sources() {
@@ -303,53 +138,20 @@ install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y podman neovim gamemode fastfetch
-    elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm podman neovim fastfetch gamemode
-    fi
-}
-
-setup_security() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    echo "${GREEN}Configurando ferramentas de segurança...${NC}"
-    
-    if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y ufw
+        sudo apt install -y podman neovim ufw gamemode fastfetch
         sudo systemctl enable ufw
-        sudo systemctl start ufw
-        sudo systemctl enable apparmor
-        sudo systemctl start apparmor
     elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm apparmor fwupd
-        sudo systemctl enable ufw
-        sudo systemctl start ufw
+        sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
         sudo systemctl enable apparmor
         sudo systemctl start apparmor
         sudo systemctl enable fwupd
         sudo systemctl start fwupd
     fi
-    
-    echo "${GREEN}Ferramentas de segurança configuradas!${NC}"
 }
 
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
-    local extras_sum=$(cat "$STATE_DIR/extras_sum")
-    local install_snapd=0
-    local install_pacstall=0
-    local install_yay=0
-    
-    if [[ $((extras_sum & 1)) -ne 0 ]]; then
-        install_snapd=1
-    fi
-    if [[ $((extras_sum & 2)) -ne 0 ]]; then
-        install_pacstall=1
-    fi
-    if [[ $((extras_sum & 16)) -ne 0 ]]; then
-        install_yay=1
-    fi
     
     if [[ "$distro" == "debian" ]]; then
         sudo apt install -y flatpak
@@ -361,204 +163,49 @@ setup_package_managers() {
         fi
         
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-        
-        if [[ "$install_snapd" == "1" ]]; then
-            sudo apt install -y snapd
-            sudo systemctl enable snapd
-            sudo systemctl start snapd
-        fi
-        
-        if [[ "$install_pacstall" == "1" ]]; then
-            sudo bash -c "$(curl -fsSL https://pacstall.dev/q/install)"
-        fi
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
-        
-        if [[ "$install_yay" == "1" ]]; then
-            sudo pacman -S --noconfirm yay
-        fi
     fi
 }
 
-install_flatpak_base() {
-    echo "${GREEN}Instalando Flatpak Base obrigatório...${NC}"
-    flatpak install -y flathub com.valvesoftware.Steam
-    flatpak install -y flathub com.vysp3r.ProtonPlus
-    flatpak install -y flathub org.prismlauncher.PrismLauncher
-    echo "${GREEN}Flatpak Base instalado com sucesso!${NC}"
-}
-
-install_waydroid() {
+install_browser() {
+    local browser=$(cat "$STATE_DIR/browser")
     local distro=$(cat "$STATE_DIR/distro")
-    local extras_sum=$(cat "$STATE_DIR/extras_sum")
-    local install_waydroid=0
-    
-    if [[ $((extras_sum & 4)) -ne 0 ]]; then
-        install_waydroid=1
-    fi
-    
-    if [[ "$install_waydroid" != "1" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando Waydroid...${NC}"
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y waydroid
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                sudo apt update
+                sudo apt install -y helium-bin
+                ;;
+            "firefox")
+                flatpak install -y flathub org.mozilla.firefox
+                ;;
+            "chrome")
+                flatpak install -y flathub com.google.Chrome
+                ;;
+        esac
     elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm waydroid
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                sudo pacman -S --noconfirm helium-browser-bin
+                ;;
+            "firefox")
+                flatpak install -y flathub org.mozilla.firefox
+                ;;
+            "chrome")
+                flatpak install -y flathub com.google.Chrome
+                ;;
+        esac
     fi
-    
-    echo "${GREEN}Waydroid instalado com sucesso!${NC}"
-}
-
-install_winboat() {
-    local distro=$(cat "$STATE_DIR/distro")
-    local extras_sum=$(cat "$STATE_DIR/extras_sum")
-    local install_winboat=0
-    
-    if [[ $((extras_sum & 8)) -ne 0 ]]; then
-        install_winboat=1
-    fi
-    
-    if [[ "$install_winboat" != "1" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando WinBoat...${NC}"
-    
-    if [[ "$distro" == "debian" ]]; then
-        local latest_url=$(curl -s https://api.github.com/repos/winboat-org/winboat/releases/latest | grep "browser_download_url.*amd64.deb" | cut -d '"' -f 4)
-        
-        if [ -z "$latest_url" ]; then
-            echo "${RED}Erro: Não foi possível encontrar a URL do pacote mais recente.${NC}"
-            return 1
-        fi
-        
-        local deb_file=$(basename "$latest_url")
-        wget "$latest_url" -O "$deb_file"
-        sudo dpkg -i "$deb_file"
-        rm -f "$deb_file"
-        
-    elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm winboat
-    fi
-    
-    echo "${GREEN}WinBoat instalado com sucesso!${NC}"
-}
-
-install_productivity() {
-    local prod_sum=$(cat "$STATE_DIR/productivity_sum")
-    
-    if [[ "$prod_sum" == "0" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando aplicativos de produtividade...${NC}"
-    
-    if [[ $((prod_sum & 1)) -ne 0 ]]; then
-        echo "Instalando OnlyOffice..."
-        flatpak install -y flathub org.onlyoffice.desktopeditors
-    fi
-    
-    if [[ $((prod_sum & 2)) -ne 0 ]]; then
-        echo "Instalando OBS Studio..."
-        flatpak install -y flathub com.obsproject.Studio
-    fi
-    
-    if [[ $((prod_sum & 4)) -ne 0 ]]; then
-        echo "Instalando Obsidian..."
-        flatpak install -y flathub md.obsidian.Obsidian
-    fi
-    
-    if [[ $((prod_sum & 8)) -ne 0 ]]; then
-        echo "Instalando GIMP..."
-        flatpak install -y flathub org.gimp.GIMP
-    fi
-    
-    if [[ $((prod_sum & 16)) -ne 0 ]]; then
-        echo "Instalando Audacity..."
-        flatpak install -y flathub org.audacityteam.Audacity
-    fi
-    
-    echo "${GREEN}Aplicativos de produtividade instalados com sucesso!${NC}"
-}
-
-install_games() {
-    local games_sum=$(cat "$STATE_DIR/games_sum")
-    
-    if [[ "$games_sum" == "0" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando jogos e launchers...${NC}"
-    
-    if [[ $((games_sum & 1)) -ne 0 ]]; then
-        echo "Instalando Hydra Launcher..."
-        curl -fsSL https://hydra.la/install.sh | bash
-    fi
-    
-    if [[ $((games_sum & 2)) -ne 0 ]]; then
-        echo "Instalando Sober..."
-        flatpak install -y flathub org.vinegarhq.Sober
-    fi
-    
-    if [[ $((games_sum & 4)) -ne 0 ]]; then
-        echo "Instalando Faugus Launcher..."
-        flatpak install -y flathub io.github.Faugus.faugus-launcher
-    fi
-    
-    if [[ $((games_sum & 8)) -ne 0 ]]; then
-        echo "Instalando shadPS4..."
-        flatpak install -y flathub net.shadps4.shadPS4
-    fi
-    
-    if [[ $((games_sum & 16)) -ne 0 ]]; then
-        echo "Instalando Ryujinx..."
-        flatpak install -y flathub io.github.ryubing.Ryujinx
-    fi
-    
-    echo "${GREEN}Jogos e launchers instalados com sucesso!${NC}"
-}
-
-install_browsers() {
-    local browser_sum=$(cat "$STATE_DIR/browser_sum")
-    
-    if [[ "$browser_sum" == "0" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando browsers...${NC}"
-    
-    if [[ $((browser_sum & 1)) -ne 0 ]]; then
-        echo "Instalando Zen Browser..."
-        flatpak install -y flathub app.zen_browser.zen
-    fi
-    
-    if [[ $((browser_sum & 2)) -ne 0 ]]; then
-        echo "Instalando Helium Browser..."
-        local distro=$(cat "$STATE_DIR/distro")
-        if [[ "$distro" == "debian" ]]; then
-            curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-            echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-            sudo apt update
-            sudo apt install -y helium-bin
-        elif [[ "$distro" == "arch" ]]; then
-            sudo pacman -S --noconfirm helium-browser-bin
-        fi
-    fi
-    
-    if [[ $((browser_sum & 4)) -ne 0 ]]; then
-        echo "Instalando Firefox..."
-        flatpak install -y flathub org.mozilla.firefox
-    fi
-    
-    if [[ $((browser_sum & 8)) -ne 0 ]]; then
-        echo "Instalando Google Chrome..."
-        flatpak install -y flathub com.google.Chrome
-    fi
-    
-    echo "${GREEN}Browsers instalados com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -689,7 +336,7 @@ select_desktop() {
     fi
     
     echo ""
-    read -p "Opção [1-5]: " de_opt
+    read -p "Opção [1-3] (Enter para GNOME): " de_opt
     
     case "$de_opt" in
         1|"") echo "gnome" > "$STATE_DIR/desktop"
@@ -814,13 +461,9 @@ main() {
     detect_gpu
     detect_cpu
     select_desktop
-    ask_extras
-    ask_productivity
-    ask_games
-    ask_browser
+    select_browser
     setup_sources
     install_base
-    setup_security
     install_cpu_microcode
     install_gpu_drivers
     install_desktop
@@ -828,12 +471,7 @@ main() {
     setup_zram
     setup_btrfs_compression
     setup_package_managers
-    install_flatpak_base
-    install_waydroid
-    install_winboat
-    install_productivity
-    install_games
-    install_browsers
+    install_browser
     setup_performance_vars
     remove_packages
     ask_reboot
