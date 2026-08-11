@@ -88,21 +88,19 @@ ask_extras() {
     echo "  2) Pacstall (AUR-style package manager for Debian)"
     echo "  4) Waydroid (Container Android)"
     echo "  8) WinBoat (Windows emulator)"
-    echo " 16) Hydra Launcher (Game launcher)"
-    echo " 32) Nix Package Manager"
+    echo " 16) Nix Package Manager"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Nix: digite 32"
-    echo "  - Hydra + Nix: digite 48"
-    echo "  - WinBoat + Hydra + Nix: digite 56"
-    echo "  - Todos: digite 63"
+    echo "  - Apenas Nix: digite 16"
+    echo "  - WinBoat + Nix: digite 24"
+    echo "  - Todos: digite 31"
     echo "  - Nenhum: digite 0"
     echo ""
-    read -p "Digite a soma das opções desejadas [0-63]: " extra_sum
+    read -p "Digite a soma das opções desejadas [0-31]: " extra_sum
     
-    if [[ ! "$extra_sum" =~ ^[0-9]|[1-5][0-9]|6[0-3]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 63.${NC}"
+    if [[ ! "$extra_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
         sleep 2
         ask_extras
         return
@@ -128,9 +126,6 @@ ask_extras() {
             echo "  ${GREEN}✓ WinBoat${NC}"
         fi
         if [[ $((extra_sum & 16)) -ne 0 ]]; then
-            echo "  ${GREEN}✓ Hydra Launcher${NC}"
-        fi
-        if [[ $((extra_sum & 32)) -ne 0 ]]; then
             echo "  ${GREEN}✓ Nix Package Manager${NC}"
         fi
     fi
@@ -188,6 +183,62 @@ ask_productivity() {
         fi
         if [[ $((prod_sum & 16)) -ne 0 ]]; then
             echo "  ${GREEN}✓ Audacity${NC}"
+        fi
+    fi
+    echo ""
+    sleep 2
+}
+
+ask_games() {
+    clear_screen
+    show_section "GAMES - SELEÇÃO INDIVIDUAL"
+    echo "${YELLOW}Digite a soma dos números dos jogos/launchers que deseja instalar:${NC}"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  1) Hydra Launcher (Game launcher)"
+    echo "  2) Sober (Roblox client)"
+    echo "  4) Faugus Launcher (Wine/Proton games)"
+    echo "  8) shadPS4 (PS4 emulator)"
+    echo " 16) Ryujinx (Switch emulator)"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${YELLOW}Exemplos:${NC}"
+    echo "  - Apenas Hydra: digite 1"
+    echo "  - Hydra + Sober: digite 3"
+    echo "  - shadPS4 + Ryujinx: digite 24"
+    echo "  - Todos: digite 31"
+    echo "  - Nenhum: digite 0"
+    echo ""
+    read -p "Digite a soma das opções desejadas [0-31]: " games_sum
+    
+    if [[ ! "$games_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
+        sleep 2
+        ask_games
+        return
+    fi
+    
+    echo "$games_sum" > "$STATE_DIR/games_sum"
+    
+    echo ""
+    echo "${GREEN}Jogos/Launchers selecionados:${NC}"
+    if [[ "$games_sum" == "0" ]]; then
+        echo "  ${YELLOW}Nenhum jogo/launcher selecionado${NC}"
+    else
+        if [[ $((games_sum & 1)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Hydra Launcher${NC}"
+        fi
+        if [[ $((games_sum & 2)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Sober${NC}"
+        fi
+        if [[ $((games_sum & 4)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Faugus Launcher${NC}"
+        fi
+        if [[ $((games_sum & 8)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ shadPS4${NC}"
+        fi
+        if [[ $((games_sum & 16)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Ryujinx${NC}"
         fi
     fi
     echo ""
@@ -359,28 +410,11 @@ install_winboat() {
     echo "${GREEN}WinBoat instalado com sucesso!${NC}"
 }
 
-install_hydra() {
-    local extras_sum=$(cat "$STATE_DIR/extras_sum")
-    local install_hydra=0
-    
-    if [[ $((extras_sum & 16)) -ne 0 ]]; then
-        install_hydra=1
-    fi
-    
-    if [[ "$install_hydra" != "1" ]]; then
-        return
-    fi
-    
-    echo "${GREEN}Instalando Hydra Launcher...${NC}"
-    curl -fsSL https://hydra.la/install.sh | bash
-    echo "${GREEN}Hydra Launcher instalado com sucesso!${NC}"
-}
-
 install_nix() {
     local extras_sum=$(cat "$STATE_DIR/extras_sum")
     local install_nix=0
     
-    if [[ $((extras_sum & 32)) -ne 0 ]]; then
+    if [[ $((extras_sum & 16)) -ne 0 ]]; then
         install_nix=1
     fi
     
@@ -428,6 +462,43 @@ install_productivity() {
     fi
     
     echo "${GREEN}Aplicativos de produtividade instalados com sucesso!${NC}"
+}
+
+install_games() {
+    local games_sum=$(cat "$STATE_DIR/games_sum")
+    
+    if [[ "$games_sum" == "0" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando jogos e launchers...${NC}"
+    
+    if [[ $((games_sum & 1)) -ne 0 ]]; then
+        echo "Instalando Hydra Launcher..."
+        curl -fsSL https://hydra.la/install.sh | bash
+    fi
+    
+    if [[ $((games_sum & 2)) -ne 0 ]]; then
+        echo "Instalando Sober..."
+        flatpak install -y flathub org.vinegarhq.Sober
+    fi
+    
+    if [[ $((games_sum & 4)) -ne 0 ]]; then
+        echo "Instalando Faugus Launcher..."
+        flatpak install -y flathub io.github.Faugus.faugus-launcher
+    fi
+    
+    if [[ $((games_sum & 8)) -ne 0 ]]; then
+        echo "Instalando shadPS4..."
+        flatpak install -y flathub net.shadps4.shadPS4
+    fi
+    
+    if [[ $((games_sum & 16)) -ne 0 ]]; then
+        echo "Instalando Ryujinx..."
+        flatpak install -y flathub io.github.ryubing.Ryujinx
+    fi
+    
+    echo "${GREEN}Jogos e launchers instalados com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -734,6 +805,7 @@ main() {
     select_desktop
     ask_extras
     ask_productivity
+    ask_games
     select_browser
     setup_sources
     install_base
@@ -747,9 +819,9 @@ main() {
     setup_package_managers
     install_waydroid
     install_winboat
-    install_hydra
     install_nix
     install_productivity
+    install_games
     install_browser
     setup_performance_vars
     remove_packages
