@@ -1,9 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
+# =============================================================================
+# CONFIGURAÇÕES INICIAIS
+# =============================================================================
+
 STATE_DIR="/tmp/debian_install_state"
 mkdir -p "$STATE_DIR"
 
+# Cores para output
 if command -v tput >/dev/null 2>&1; then
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
@@ -16,6 +21,10 @@ if command -v tput >/dev/null 2>&1; then
 else
     RED=''; GREEN=''; YELLOW=''; BLUE=''; MAGENTA=''; CYAN=''; BOLD=''; NC=''
 fi
+
+# =============================================================================
+# FUNÇÕES AUXILIARES
+# =============================================================================
 
 confirm() {
     local prompt="$1"
@@ -43,6 +52,10 @@ show_option() {
     local desc="$2"
     echo "  ${CYAN}$num${NC}) $desc"
 }
+
+# =============================================================================
+# DETECÇÃO DE HARDWARE E SISTEMA
+# =============================================================================
 
 detect_distro() {
     if [ -f /etc/debian_version ]; then
@@ -78,6 +91,65 @@ detect_cpu() {
     else
         echo "intel" > "$STATE_DIR/cpu"
     fi
+}
+
+# =============================================================================
+# FUNÇÕES DE SELEÇÃO (INTERATIVAS)
+# =============================================================================
+
+select_desktop() {
+    clear_screen
+    show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
+    show_option "1" "GNOME"
+    show_option "2" "KDE Plasma"
+    show_option "3" "Nenhum"
+    
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    # Opções exclusivas para Arch
+    if [[ "$distro" == "arch" ]]; then
+        show_option "4" "COSMIC"
+        show_option "5" "Dank Linux"
+    fi
+    
+    echo ""
+    read -p "Opção [1-3] (Enter para GNOME): " de_opt
+    
+    case "$de_opt" in
+        1|"") echo "gnome" > "$STATE_DIR/desktop"
+             echo "${GREEN}Desktop: GNOME${NC}" ;;
+        2) echo "kde" > "$STATE_DIR/desktop"
+           echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
+        3) echo "none" > "$STATE_DIR/desktop"
+           echo "${GREEN}Desktop: Nenhum${NC}" ;;
+        4) 
+            if [[ "$distro" == "arch" ]]; then
+                echo "cosmic" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: COSMIC${NC}"
+            else
+                echo "${RED}Opção inválida.${NC}"
+                sleep 1
+                select_desktop
+                return
+            fi
+            ;;
+        5)
+            if [[ "$distro" == "arch" ]]; then
+                echo "dank" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: Dank Linux${NC}"
+            else
+                echo "${RED}Opção inválida.${NC}"
+                sleep 1
+                select_desktop
+                return
+            fi
+            ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_desktop
+           return
+    esac
+    sleep 2
 }
 
 select_browser() {
@@ -117,131 +189,225 @@ select_browser() {
     sleep 1
 }
 
+# =============================================================================
+# CONFIGURAÇÃO DE REPOSITÓRIOS
+# =============================================================================
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        if [ -f /etc/apt/sources.list ]; then
-            sudo sed -i 's/\(main\)/\1 contrib non-free/g' /etc/apt/sources.list
-        fi
-        
-        if [ -f /etc/apt/sources.list.d/debian.sources ]; then
-            sudo sed -i '/^Components:/ s/\(main\)/\1 contrib non-free/' /etc/apt/sources.list.d/debian.sources
-        fi
-        
-        sudo apt update
-        sudo apt upgrade -y
-    elif [[ "$distro" == "arch" ]]; then
-        sudo pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
-        sudo pacman-key --lsign-key 3056513887B78AEB
-        sudo pacman -U --noconfirm \
-            "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst" \
-            "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst"
-        sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
-        sudo sed -i '/Color/a ILoveCandy' /etc/pacman.conf
-        sudo sed -i '/^ParallelDownloads/d' /etc/pacman.conf
-        sudo sed -i '/ILoveCandy/a ParallelDownloads = 15' /etc/pacman.conf
-        echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
-        sudo pacman -Syu --noconfirm
-    elif [[ "$distro" == "almalinux" ]]; then
-        sudo dnf install -y epel-release
-        sudo dnf update -y
-        sudo dnf upgrade -y
-    fi
+    case "$distro" in
+        debian)
+            # Adiciona contrib e non-free ao Debian
+            if [ -f /etc/apt/sources.list ]; then
+                sudo sed -i 's/\(main\)/\1 contrib non-free/g' /etc/apt/sources.list
+            fi
+            
+            if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+                sudo sed -i '/^Components:/ s/\(main\)/\1 contrib non-free/' /etc/apt/sources.list.d/debian.sources
+            fi
+            
+            sudo apt update
+            sudo apt upgrade -y
+            ;;
+            
+        arch)
+            # Configura Chaotic AUR para Arch
+            sudo pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com
+            sudo pacman-key --lsign-key 3056513887B78AEB
+            sudo pacman -U --noconfirm \
+                "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst" \
+                "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst"
+            
+            # Configura pacman.conf
+            sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
+            sudo sed -i '/Color/a ILoveCandy' /etc/pacman.conf
+            sudo sed -i '/^ParallelDownloads/d' /etc/pacman.conf
+            sudo sed -i '/ILoveCandy/a ParallelDownloads = 15' /etc/pacman.conf
+            echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
+            
+            sudo pacman -Syu --noconfirm
+            ;;
+            
+        almalinux)
+            # Adiciona EPEL para AlmaLinux
+            sudo dnf install -y epel-release
+            sudo dnf update -y
+            sudo dnf upgrade -y
+            ;;
+    esac
 }
+
+# =============================================================================
+# INSTALAÇÃO DE PACOTES BASE
+# =============================================================================
 
 install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y podman neovim ufw gamemode fastfetch
-        sudo systemctl enable ufw
-    elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
-        sudo systemctl enable apparmor
-        sudo systemctl start apparmor
-        sudo systemctl enable fwupd
-        sudo systemctl start fwupd
-    elif [[ "$distro" == "almalinux" ]]; then
-        sudo dnf install -y podman neovim gamemode fastfetch
-        sudo systemctl enable firewalld
-        sudo systemctl start firewalld
-    fi
+    case "$distro" in
+        debian)
+            sudo apt install -y podman neovim ufw gamemode fastfetch
+            sudo systemctl enable ufw
+            ;;
+        arch)
+            sudo pacman -S --noconfirm apparmor podman neovim fastfetch gamemode fwupd
+            sudo systemctl enable apparmor
+            sudo systemctl start apparmor
+            sudo systemctl enable fwupd
+            sudo systemctl start fwupd
+            ;;
+        almalinux)
+            sudo dnf install -y podman neovim gamemode fastfetch
+            sudo systemctl enable firewalld
+            sudo systemctl start firewalld
+            ;;
+    esac
 }
+
+# =============================================================================
+# GERENCIADORES DE PACOTES (FLATPAK, ETC)
+# =============================================================================
 
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y flatpak
-        
-        if [[ "$desktop" == "gnome" ]]; then
-            sudo apt install -y gnome-software-plugin-flatpak
-        elif [[ "$desktop" == "kde" ]]; then
-            sudo apt install -y plasma-discover-backend-flatpak
-        fi
-        
-        sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    elif [[ "$distro" == "arch" ]]; then
-        sudo pacman -S --noconfirm flatpak
-    elif [[ "$distro" == "almalinux" ]]; then
-        sudo dnf install -y flatpak
-        sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    fi
+    case "$distro" in
+        debian)
+            sudo apt install -y flatpak
+            
+            if [[ "$desktop" == "gnome" ]]; then
+                sudo apt install -y gnome-software-plugin-flatpak
+            elif [[ "$desktop" == "kde" ]]; then
+                sudo apt install -y plasma-discover-backend-flatpak
+            fi
+            
+            sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            ;;
+        arch)
+            sudo pacman -S --noconfirm flatpak
+            ;;
+        almalinux)
+            sudo dnf install -y flatpak
+            sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            ;;
+    esac
 }
+
+# =============================================================================
+# INSTALAÇÃO DE DESKTOP
+# =============================================================================
+
+install_desktop() {
+    local desktop=$(cat "$STATE_DIR/desktop")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    case "$distro" in
+        debian)
+            case "$desktop" in
+                gnome)
+                    sudo apt install -y gdm3 gnome-initial-setup gnome-console gnome-software gnome-tweaks gnome-disk-utility gnome-backgrounds
+                    sudo systemctl enable gdm3
+                    ;;
+                kde)
+                    sudo apt install -y sddm plasma-desktop plasma-workspace-wallpapers konsole dolphin discover kdeconnect partitionmanager ark
+                    sudo systemctl enable sddm
+                    ;;
+                none)
+                    echo "${YELLOW}Nenhum desktop instalado.${NC}"
+                    ;;
+            esac
+            ;;
+            
+        arch)
+            case "$desktop" in
+                gnome)
+                    sudo pacman -S --noconfirm gnome-initial-setup gnome-console gnome-software gnome-tweaks gnome-disk-utility gnome-backgrounds
+                    sudo systemctl enable gdm
+                    ;;
+                kde)
+                    sudo pacman -S --noconfirm plasma-meta konsole dolphin kdeconnect partitionmanager ark
+                    sudo systemctl enable plasmalogin
+                    ;;
+                cosmic)
+                    sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk
+                    sudo systemctl enable cosmic-greeter
+                    ;;
+                dank)
+                    curl -fsSL https://install.danklinux.com | sh
+                    ;;
+                none)
+                    echo "${YELLOW}Nenhum desktop instalado.${NC}"
+                    ;;
+            esac
+            ;;
+            
+        almalinux)
+            case "$desktop" in
+                gnome)
+                    sudo dnf install -y gnome-initial-setup gnome-software gnome-tweaks gnome-disk-utility ptyxis
+                    sudo systemctl enable gdm
+                    sudo systemctl set-default graphical.target
+                    ;;
+                kde)
+                    sudo dnf install -y sddm plasma-desktop konsole dolphin
+                    sudo systemctl enable sddm
+                    sudo systemctl set-default graphical.target
+                    ;;
+                none)
+                    echo "${YELLOW}Nenhum desktop instalado.${NC}"
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# =============================================================================
+# INSTALAÇÃO DE BROWSERS
+# =============================================================================
 
 install_browser() {
     local browser=$(cat "$STATE_DIR/browser")
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-                sudo apt update
-                sudo apt install -y helium-bin
-                ;;
-            "firefox")
-                flatpak install -y flathub org.mozilla.firefox
-                ;;
-            "chrome")
-                flatpak install -y flathub com.google.Chrome
-                ;;
-        esac
-    elif [[ "$distro" == "arch" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                sudo pacman -S --noconfirm helium-browser-bin
-                ;;
-            "firefox")
-                flatpak install -y flathub org.mozilla.firefox
-                ;;
-            "chrome")
-                flatpak install -y flathub com.google.Chrome
-                ;;
-        esac
-    elif [[ "$distro" == "almalinux" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "firefox")
-                flatpak install -y flathub org.mozilla.firefox
-                ;;
-            "chrome")
-                flatpak install -y flathub com.google.Chrome
-                ;;
-        esac
-    fi
+    case "$distro" in
+        debian)
+            case "$browser" in
+                zen)     flatpak install -y flathub app.zen_browser.zen ;;
+                helium)
+                    curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                    sudo apt update
+                    sudo apt install -y helium-bin
+                    ;;
+                firefox) flatpak install -y flathub org.mozilla.firefox ;;
+                chrome)  flatpak install -y flathub com.google.Chrome ;;
+            esac
+            ;;
+            
+        arch)
+            case "$browser" in
+                zen)     flatpak install -y flathub app.zen_browser.zen ;;
+                helium)  sudo pacman -S --noconfirm helium-browser-bin ;;
+                firefox) flatpak install -y flathub org.mozilla.firefox ;;
+                chrome)  flatpak install -y flathub com.google.Chrome ;;
+            esac
+            ;;
+            
+        almalinux)
+            case "$browser" in
+                zen)     flatpak install -y flathub app.zen_browser.zen ;;
+                firefox) flatpak install -y flathub org.mozilla.firefox ;;
+                chrome)  flatpak install -y flathub com.google.Chrome ;;
+            esac
+            ;;
+    esac
 }
+
+# =============================================================================
+# CONFIGURAÇÕES ESPECÍFICAS DO DEBIAN
+# =============================================================================
 
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -291,6 +457,10 @@ setup_btrfs_compression() {
     fi
 }
 
+# =============================================================================
+# DRIVERS DE VÍDEO
+# =============================================================================
+
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
         echo "${YELLOW}mokutil não instalado. Pulando importação da chave MOK.${NC}"
@@ -323,179 +493,70 @@ install_gpu_drivers() {
     local gpu=$(cat "$STATE_DIR/gpu_driver")
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        case "$gpu" in
-            "intel"|"amd")
-                sudo apt install -y mesa-vulkan-drivers
-                ;;
-            "nvidia")
-                sudo apt install -y linux-headers-amd64
-                wget https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb
-                sudo dpkg -i cuda-keyring_1.1-1_all.deb
-                sudo apt update
-                sudo apt -y install nvidia-open
-                rm -f cuda-keyring_1.1-1_all.deb
-                import_mok_key
-                ;;
-        esac
-    elif [[ "$distro" == "arch" ]]; then
-        case "$gpu" in
-            "intel")
-                sudo pacman -S --noconfirm vulkan-intel
-                ;;
-            "amd")
-                sudo pacman -S --noconfirm vulkan-radeon
-                ;;
-            "nvidia")
-                sudo pacman -S --noconfirm nvidia-open
-                ;;
-        esac
-    elif [[ "$distro" == "almalinux" ]]; then
-        case "$gpu" in
-            "nvidia")
-                sudo dnf install -y almalinux-release-nvidia-driver
-                sudo dnf install -y nvidia-driver
-                ;;
-        esac
-    fi
+    case "$distro" in
+        debian)
+            case "$gpu" in
+                intel|amd)
+                    sudo apt install -y mesa-vulkan-drivers
+                    ;;
+                nvidia)
+                    sudo apt install -y linux-headers-amd64
+                    wget https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb
+                    sudo dpkg -i cuda-keyring_1.1-1_all.deb
+                    sudo apt update
+                    sudo apt -y install nvidia-open
+                    rm -f cuda-keyring_1.1-1_all.deb
+                    import_mok_key
+                    ;;
+            esac
+            ;;
+            
+        arch)
+            case "$gpu" in
+                intel)   sudo pacman -S --noconfirm vulkan-intel ;;
+                amd)     sudo pacman -S --noconfirm vulkan-radeon ;;
+                nvidia)  sudo pacman -S --noconfirm nvidia-open ;;
+            esac
+            ;;
+            
+        almalinux)
+            case "$gpu" in
+                nvidia)
+                    sudo dnf install -y almalinux-release-nvidia-driver
+                    sudo dnf install -y nvidia-driver
+                    ;;
+            esac
+            ;;
+    esac
 }
+
+# =============================================================================
+# MICROCÓDIGO DA CPU
+# =============================================================================
 
 install_cpu_microcode() {
     local cpu=$(cat "$STATE_DIR/cpu")
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" ]]; then
-        case "$cpu" in
-            "intel")
-                sudo apt install -y intel-microcode
-                ;;
-            "amd")
-                sudo apt install -y amd64-microcode
-                ;;
-        esac
-    elif [[ "$distro" == "arch" ]]; then
-        case "$cpu" in
-            "intel")
-                sudo pacman -S --noconfirm intel-ucode
-                ;;
-            "amd")
-                sudo pacman -S --noconfirm amd-ucode
-                ;;
-        esac
-    fi
-}
-
-select_desktop() {
-    clear_screen
-    show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
-    show_option "1" "GNOME"
-    show_option "2" "KDE Plasma"
-    show_option "3" "Nenhum"
-    
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "arch" ]]; then
-        show_option "4" "COSMIC"
-        show_option "5" "Dank Linux"
-    fi
-    
-    echo ""
-    read -p "Opção [1-3] (Enter para GNOME): " de_opt
-    
-    case "$de_opt" in
-        1|"") echo "gnome" > "$STATE_DIR/desktop"
-             echo "${GREEN}Desktop: GNOME${NC}" ;;
-        2) echo "kde" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
-        3) echo "none" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: Nenhum${NC}" ;;
-        4) 
-            if [[ "$distro" == "arch" ]]; then
-                echo "cosmic" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: COSMIC${NC}"
-            else
-                echo "${RED}Opção inválida.${NC}"
-                sleep 1
-                select_desktop
-                return
-            fi
+    case "$distro" in
+        debian)
+            case "$cpu" in
+                intel) sudo apt install -y intel-microcode ;;
+                amd)   sudo apt install -y amd64-microcode ;;
+            esac
             ;;
-        5)
-            if [[ "$distro" == "arch" ]]; then
-                echo "dank" > "$STATE_DIR/desktop"
-                echo "${GREEN}Desktop: Dank Linux${NC}"
-            else
-                echo "${RED}Opção inválida.${NC}"
-                sleep 1
-                select_desktop
-                return
-            fi
+        arch)
+            case "$cpu" in
+                intel) sudo pacman -S --noconfirm intel-ucode ;;
+                amd)   sudo pacman -S --noconfirm amd-ucode ;;
+            esac
             ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_desktop
-           return
     esac
-    sleep 2
 }
 
-install_desktop() {
-    local desktop=$(cat "$STATE_DIR/desktop")
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        case "$desktop" in
-            "gnome")
-                sudo apt install -y gdm3 gnome-initial-setup gnome-console gnome-software gnome-tweaks gnome-disk-utility gnome-backgrounds
-                sudo systemctl enable gdm3
-                ;;
-            "kde")
-                sudo apt install -y sddm plasma-desktop plasma-workspace-wallpapers konsole dolphin discover kdeconnect partitionmanager ark
-                sudo systemctl enable sddm
-                ;;
-            "none")
-                echo "${YELLOW}Nenhum desktop instalado.${NC}"
-                ;;
-        esac
-    elif [[ "$distro" == "arch" ]]; then
-        case "$desktop" in
-            "gnome")
-                sudo pacman -S --noconfirm gnome-initial-setup gnome-console gnome-software gnome-tweaks gnome-disk-utility gnome-backgrounds
-                sudo systemctl enable gdm
-                ;;
-            "kde")
-                sudo pacman -S --noconfirm plasma-meta konsole dolphin kdeconnect partitionmanager ark
-                sudo systemctl enable plasmalogin
-                ;;
-            "cosmic")
-                sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk
-                sudo systemctl enable cosmic-greeter
-                ;;
-            "dank")
-                curl -fsSL https://install.danklinux.com | sh
-                ;;
-            "none")
-                echo "${YELLOW}Nenhum desktop instalado.${NC}"
-                ;;
-        esac
-    elif [[ "$distro" == "almalinux" ]]; then
-        case "$desktop" in
-            "gnome")
-                sudo dnf install -y gnome-initial-setup gnome-software gnome-tweaks gnome-disk-utility ptyxis
-                sudo systemctl enable gdm
-                sudo systemctl set-default graphical.target
-                ;;
-            "kde")
-                sudo dnf install -y sddm plasma-desktop konsole dolphin
-                sudo systemctl enable sddm
-                sudo systemctl set-default graphical.target
-                ;;
-            "none")
-                echo "${YELLOW}Nenhum desktop instalado.${NC}"
-                ;;
-        esac
-    fi
-}
+# =============================================================================
+# CONFIGURAÇÕES DE PERFORMANCE
+# =============================================================================
 
 setup_performance_vars() {
     sudo mkdir -p /etc/environment.d
@@ -505,6 +566,10 @@ __GL_SHADER_DISK_CACHE_SIZE=12000000000
 EOF
 }
 
+# =============================================================================
+# LIMPEZA DE PACOTES INDESEJADOS
+# =============================================================================
+
 remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -513,6 +578,10 @@ remove_packages() {
         sudo apt autoremove -y
     fi
 }
+
+# =============================================================================
+# REINICIALIZAÇÃO
+# =============================================================================
 
 ask_reboot() {
     echo ""
@@ -526,25 +595,50 @@ ask_reboot() {
     fi
 }
 
+# =============================================================================
+# FUNÇÃO PRINCIPAL
+# =============================================================================
+
 main() {
+    # 1. Detecção do sistema
     detect_distro
     detect_gpu
     detect_cpu
+    
+    # 2. Seleções interativas
     select_desktop
     select_browser
+    
+    # 3. Configuração de repositórios
     setup_sources
+    
+    # 4. Instalação base
     install_base
     install_cpu_microcode
     install_gpu_drivers
+    
+    # 5. Desktop e browsers
     install_desktop
+    install_browser
+    
+    # 6. Configurações específicas do Debian
     setup_network
     setup_zram
     setup_btrfs_compression
+    
+    # 7. Gerenciadores de pacotes
     setup_package_managers
-    install_browser
+    
+    # 8. Configurações finais
     setup_performance_vars
     remove_packages
+    
+    # 9. Reinicialização
     ask_reboot
 }
+
+# =============================================================================
+# EXECUÇÃO
+# =============================================================================
 
 main
