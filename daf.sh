@@ -49,6 +49,8 @@ detect_distro() {
         echo "debian" > "$STATE_DIR/distro"
     elif [ -f /etc/arch-release ]; then
         echo "arch" > "$STATE_DIR/distro"
+    elif [ -f /etc/almalinux-release ]; then
+        echo "alma" > "$STATE_DIR/distro"
     else
         echo "unknown" > "$STATE_DIR/distro"
     fi
@@ -131,6 +133,9 @@ setup_sources() {
         sudo sed -i '/ILoveCandy/a ParallelDownloads = 15' /etc/pacman.conf
         echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
         sudo pacman -Syu --noconfirm
+    elif [[ "$distro" == "alma" ]]; then
+        sudo dnf install epel-release -y
+        sudo systemctl set-default graphical.target
     fi
 }
 
@@ -165,6 +170,9 @@ setup_package_managers() {
         sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     elif [[ "$distro" == "arch" ]]; then
         sudo pacman -S --noconfirm flatpak
+    elif [[ "$distro" == "alma" ]]; then
+        sudo dnf install -y flatpak
+        sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     fi
 }
 
@@ -197,6 +205,21 @@ install_browser() {
                 ;;
             "helium")
                 sudo pacman -S --noconfirm helium-browser-bin
+                ;;
+            "firefox")
+                flatpak install -y flathub org.mozilla.firefox
+                ;;
+            "chrome")
+                flatpak install -y flathub com.google.Chrome
+                ;;
+        esac
+    elif [[ "$distro" == "alma" ]]; then
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                echo "${YELLOW}Helium Browser não está disponível para Alma Linux.${NC}"
                 ;;
             "firefox")
                 flatpak install -y flathub org.mozilla.firefox
@@ -324,28 +347,63 @@ install_cpu_microcode() {
 select_desktop() {
     clear_screen
     show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
-    show_option "1" "GNOME"
-    show_option "2" "KDE Plasma"
-    show_option "3" "Nenhum"
     
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "arch" ]]; then
+    if [[ "$distro" == "debian" ]]; then
+        show_option "1" "GNOME"
+        show_option "2" "KDE Plasma"
+        show_option "3" "Nenhum"
+    elif [[ "$distro" == "arch" ]]; then
+        show_option "1" "GNOME"
+        show_option "2" "KDE Plasma"
+        show_option "3" "Nenhum"
         show_option "4" "COSMIC"
         show_option "5" "Dank Linux"
+    elif [[ "$distro" == "alma" ]]; then
+        show_option "1" "Workstation (GNOME)"
+        show_option "2" "KDE Desktop"
     fi
     
     echo ""
-    read -p "Opção [1-3] (Enter para GNOME): " de_opt
+    
+    if [[ "$distro" == "alma" ]]; then
+        read -p "Opção [1-2]: " de_opt
+    else
+        read -p "Opção [1-3] (Enter para GNOME): " de_opt
+    fi
     
     case "$de_opt" in
-        1|"") echo "gnome" > "$STATE_DIR/desktop"
-             echo "${GREEN}Desktop: GNOME${NC}" ;;
-        2) echo "kde" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
-        3) echo "none" > "$STATE_DIR/desktop"
-           echo "${GREEN}Desktop: Nenhum${NC}" ;;
-        4) 
+        1|"") 
+            if [[ "$distro" == "alma" ]]; then
+                echo "workstation" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: Workstation (GNOME)${NC}"
+            else
+                echo "gnome" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: GNOME${NC}"
+            fi
+            ;;
+        2)
+            if [[ "$distro" == "alma" ]]; then
+                echo "kde-desktop" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: KDE Desktop${NC}"
+            else
+                echo "kde" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: KDE Plasma${NC}"
+            fi
+            ;;
+        3)
+            if [[ "$distro" != "alma" ]]; then
+                echo "none" > "$STATE_DIR/desktop"
+                echo "${GREEN}Desktop: Nenhum${NC}"
+            else
+                echo "${RED}Opção inválida.${NC}"
+                sleep 1
+                select_desktop
+                return
+            fi
+            ;;
+        4)
             if [[ "$distro" == "arch" ]]; then
                 echo "cosmic" > "$STATE_DIR/desktop"
                 echo "${GREEN}Desktop: COSMIC${NC}"
@@ -412,6 +470,15 @@ install_desktop() {
                 ;;
             "none")
                 echo "${YELLOW}Nenhum desktop instalado.${NC}"
+                ;;
+        esac
+    elif [[ "$distro" == "alma" ]]; then
+        case "$desktop" in
+            "workstation")
+                sudo dnf group install -y "Workstation"
+                ;;
+            "kde-desktop")
+                sudo dnf group install -y "KDE Desktop"
                 ;;
         esac
     fi
