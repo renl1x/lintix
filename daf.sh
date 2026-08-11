@@ -88,19 +88,20 @@ ask_extras() {
     echo "  2) Pacstall (AUR-style package manager for Debian)"
     echo "  4) Waydroid (Container Android)"
     echo "  8) WinBoat (Windows emulator)"
+    echo " 16) Hydra Launcher (Game launcher)"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     echo "${YELLOW}Exemplos:${NC}"
     echo "  - Apenas Snapd: digite 1"
-    echo "  - Apenas WinBoat: digite 8"
-    echo "  - Snapd + WinBoat: digite 9"
-    echo "  - Todos: digite 15"
+    echo "  - Apenas Hydra: digite 16"
+    echo "  - WinBoat + Hydra: digite 24"
+    echo "  - Todos: digite 31"
     echo "  - Nenhum: digite 0"
     echo ""
-    read -p "Digite a soma das opções desejadas [0-15]: " extra_sum
+    read -p "Digite a soma das opções desejadas [0-31]: " extra_sum
     
-    if [[ ! "$extra_sum" =~ ^[0-9]|1[0-5]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 15.${NC}"
+    if [[ ! "$extra_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
         sleep 2
         ask_extras
         return
@@ -124,6 +125,9 @@ ask_extras() {
         fi
         if [[ $((extra_sum & 8)) -ne 0 ]]; then
             echo "  ${GREEN}✓ WinBoat${NC}"
+        fi
+        if [[ $((extra_sum & 16)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Hydra Launcher${NC}"
         fi
     fi
     echo ""
@@ -293,6 +297,23 @@ install_winboat() {
     fi
     
     echo "${GREEN}WinBoat instalado com sucesso!${NC}"
+}
+
+install_hydra() {
+    local extras_sum=$(cat "$STATE_DIR/extras_sum")
+    local install_hydra=0
+    
+    if [[ $((extras_sum & 16)) -ne 0 ]]; then
+        install_hydra=1
+    fi
+    
+    if [[ "$install_hydra" != "1" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando Hydra Launcher...${NC}"
+    curl -fsSL https://hydra.la/install.sh | bash
+    echo "${GREEN}Hydra Launcher instalado com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -611,6 +632,7 @@ main() {
     setup_package_managers
     install_waydroid
     install_winboat
+    install_hydra
     install_browser
     setup_performance_vars
     remove_packages
