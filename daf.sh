@@ -89,19 +89,20 @@ ask_extras() {
     echo "  4) Waydroid (Container Android)"
     echo "  8) WinBoat (Windows emulator)"
     echo " 16) Hydra Launcher (Game launcher)"
+    echo " 32) Nix Package Manager"
     echo ""
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     echo "${YELLOW}Exemplos:${NC}"
-    echo "  - Apenas Snapd: digite 1"
-    echo "  - Apenas Hydra: digite 16"
-    echo "  - WinBoat + Hydra: digite 24"
-    echo "  - Todos: digite 31"
+    echo "  - Apenas Nix: digite 32"
+    echo "  - Hydra + Nix: digite 48"
+    echo "  - WinBoat + Hydra + Nix: digite 56"
+    echo "  - Todos: digite 63"
     echo "  - Nenhum: digite 0"
     echo ""
-    read -p "Digite a soma das opções desejadas [0-31]: " extra_sum
+    read -p "Digite a soma das opções desejadas [0-63]: " extra_sum
     
-    if [[ ! "$extra_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
-        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
+    if [[ ! "$extra_sum" =~ ^[0-9]|[1-5][0-9]|6[0-3]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 63.${NC}"
         sleep 2
         ask_extras
         return
@@ -128,6 +129,65 @@ ask_extras() {
         fi
         if [[ $((extra_sum & 16)) -ne 0 ]]; then
             echo "  ${GREEN}✓ Hydra Launcher${NC}"
+        fi
+        if [[ $((extra_sum & 32)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Nix Package Manager${NC}"
+        fi
+    fi
+    echo ""
+    sleep 2
+}
+
+ask_productivity() {
+    clear_screen
+    show_section "PRODUTIVIDADE - SELEÇÃO INDIVIDUAL"
+    echo "${YELLOW}Digite a soma dos números dos aplicativos que deseja instalar:${NC}"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  1) OnlyOffice (Suite de escritório)"
+    echo "  2) OBS Studio (Gravação/transmissão de tela)"
+    echo "  4) Obsidian (Notas e conhecimento)"
+    echo "  8) GIMP (Edição de imagens)"
+    echo " 16) Audacity (Edição de áudio)"
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${YELLOW}Exemplos:${NC}"
+    echo "  - Apenas OnlyOffice: digite 1"
+    echo "  - OnlyOffice + OBS: digite 3"
+    echo "  - GIMP + Audacity: digite 24"
+    echo "  - Todos: digite 31"
+    echo "  - Nenhum: digite 0"
+    echo ""
+    read -p "Digite a soma das opções desejadas [0-31]: " prod_sum
+    
+    if [[ ! "$prod_sum" =~ ^[0-9]|[12][0-9]|3[01]$ ]]; then
+        echo "${RED}Opção inválida. Digite um número entre 0 e 31.${NC}"
+        sleep 2
+        ask_productivity
+        return
+    fi
+    
+    echo "$prod_sum" > "$STATE_DIR/productivity_sum"
+    
+    echo ""
+    echo "${GREEN}Aplicativos selecionados:${NC}"
+    if [[ "$prod_sum" == "0" ]]; then
+        echo "  ${YELLOW}Nenhum aplicativo selecionado${NC}"
+    else
+        if [[ $((prod_sum & 1)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ OnlyOffice${NC}"
+        fi
+        if [[ $((prod_sum & 2)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ OBS Studio${NC}"
+        fi
+        if [[ $((prod_sum & 4)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Obsidian${NC}"
+        fi
+        if [[ $((prod_sum & 8)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ GIMP${NC}"
+        fi
+        if [[ $((prod_sum & 16)) -ne 0 ]]; then
+            echo "  ${GREEN}✓ Audacity${NC}"
         fi
     fi
     echo ""
@@ -314,6 +374,60 @@ install_hydra() {
     echo "${GREEN}Instalando Hydra Launcher...${NC}"
     curl -fsSL https://hydra.la/install.sh | bash
     echo "${GREEN}Hydra Launcher instalado com sucesso!${NC}"
+}
+
+install_nix() {
+    local extras_sum=$(cat "$STATE_DIR/extras_sum")
+    local install_nix=0
+    
+    if [[ $((extras_sum & 32)) -ne 0 ]]; then
+        install_nix=1
+    fi
+    
+    if [[ "$install_nix" != "1" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando Nix Package Manager...${NC}"
+    curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install | sh -s -- --daemon
+    echo "${GREEN}Nix Package Manager instalado com sucesso!${NC}"
+}
+
+install_productivity() {
+    local prod_sum=$(cat "$STATE_DIR/productivity_sum")
+    
+    if [[ "$prod_sum" == "0" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando aplicativos de produtividade...${NC}"
+    
+    if [[ $((prod_sum & 1)) -ne 0 ]]; then
+        echo "Instalando OnlyOffice..."
+        flatpak install -y flathub org.onlyoffice.desktopeditors
+    fi
+    
+    if [[ $((prod_sum & 2)) -ne 0 ]]; then
+        echo "Instalando OBS Studio..."
+        flatpak install -y flathub com.obsproject.Studio
+    fi
+    
+    if [[ $((prod_sum & 4)) -ne 0 ]]; then
+        echo "Instalando Obsidian..."
+        flatpak install -y flathub md.obsidian.Obsidian
+    fi
+    
+    if [[ $((prod_sum & 8)) -ne 0 ]]; then
+        echo "Instalando GIMP..."
+        flatpak install -y flathub org.gimp.GIMP
+    fi
+    
+    if [[ $((prod_sum & 16)) -ne 0 ]]; then
+        echo "Instalando Audacity..."
+        flatpak install -y flathub org.audacityteam.Audacity
+    fi
+    
+    echo "${GREEN}Aplicativos de produtividade instalados com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -619,6 +733,7 @@ main() {
     detect_cpu
     select_desktop
     ask_extras
+    ask_productivity
     select_browser
     setup_sources
     install_base
@@ -633,6 +748,8 @@ main() {
     install_waydroid
     install_winboat
     install_hydra
+    install_nix
+    install_productivity
     install_browser
     setup_performance_vars
     remove_packages
