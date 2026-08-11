@@ -29,6 +29,18 @@ confirm() {
     fi
 }
 
+confirm_yes() {
+    local prompt="$1"
+    local resposta
+    read -p "$prompt (S/n): " -n 1 resposta
+    echo
+    if [[ -z "$resposta" ]]; then
+        return 0
+    else
+        [[ "$resposta" =~ ^[Ss]$ ]]
+    fi
+}
+
 clear_screen() { clear; }
 
 show_section() {
@@ -79,40 +91,38 @@ detect_cpu() {
 }
 
 ask_extra_repos() {
+    clear_screen
+    show_section "EXTRAS - SELEÇÃO INDIVIDUAL"
+    echo "${YELLOW}Selecione quais extras deseja instalar:${NC}"
     echo ""
-    echo "${YELLOW}Deseja ativar repositórios extras?${NC}"
+    
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  ${BOLD}Repositórios Extras${NC}"
     echo "  Debian: snapd + pacstall"
     echo "  Arch:   yay (AUR helper)"
     echo ""
-    if confirm "Ativar repositórios extras?"; then
+    if confirm_yes "Instalar repositórios extras?"; then
         echo "1" > "$STATE_DIR/extra_repos"
-        echo "${GREEN}Repositórios extras ativados!${NC}"
+        echo "${GREEN}✓ Repositórios extras ativados${NC}"
     else
         echo "0" > "$STATE_DIR/extra_repos"
-        echo "${YELLOW}Repositórios extras desativados.${NC}"
+        echo "${YELLOW}✗ Repositórios extras desativados${NC}"
     fi
-    sleep 1
-}
-
-select_browser() {
-    clear_screen
-    show_section "SELECIONE O BROWSER"
-    show_option "1" "Zen Browser (Flatpak)"
-    show_option "2" "Helium Browser"
     echo ""
-    read -p "Opção [1-2] (Enter para Zen Browser): " browser_opt
     
-    case "$browser_opt" in
-        1|"") echo "zen" > "$STATE_DIR/browser"
-             echo "${GREEN}Browser: Zen Browser${NC}" ;;
-        2) echo "helium" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Helium Browser${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_browser
-           return
-    esac
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "  ${BOLD}Waydroid${NC}"
+    echo "  Container Android para Linux"
+    echo ""
+    if confirm_yes "Instalar Waydroid?"; then
+        echo "1" > "$STATE_DIR/waydroid"
+        echo "${GREEN}✓ Waydroid ativado${NC}"
+    else
+        echo "0" > "$STATE_DIR/waydroid"
+        echo "${YELLOW}✗ Waydroid desativado${NC}"
+    fi
+    echo ""
+    
     sleep 1
 }
 
@@ -191,32 +201,23 @@ setup_package_managers() {
     fi
 }
 
-install_browser() {
-    local browser=$(cat "$STATE_DIR/browser")
+install_waydroid() {
     local distro=$(cat "$STATE_DIR/distro")
+    local waydroid=$(cat "$STATE_DIR/waydroid")
+    
+    if [[ "$waydroid" != "1" ]]; then
+        return
+    fi
+    
+    echo "${GREEN}Instalando Waydroid...${NC}"
     
     if [[ "$distro" == "debian" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-                sudo apt update
-                sudo apt install -y helium-bin
-                ;;
-        esac
+        sudo apt install -y waydroid
     elif [[ "$distro" == "arch" ]]; then
-        case "$browser" in
-            "zen")
-                flatpak install -y flathub app.zen_browser.zen
-                ;;
-            "helium")
-                sudo pacman -S --noconfirm helium-browser-bin
-                ;;
-        esac
+        sudo pacman -S --noconfirm waydroid
     fi
+    
+    echo "${GREEN}Waydroid instalado com sucesso!${NC}"
 }
 
 setup_zram() {
@@ -330,6 +331,27 @@ install_cpu_microcode() {
                 ;;
         esac
     fi
+}
+
+select_browser() {
+    clear_screen
+    show_section "SELECIONE O BROWSER"
+    show_option "1" "Zen Browser (Flatpak)"
+    show_option "2" "Helium Browser"
+    echo ""
+    read -p "Opção [1-2] (Enter para Zen Browser): " browser_opt
+    
+    case "$browser_opt" in
+        1|"") echo "zen" > "$STATE_DIR/browser"
+             echo "${GREEN}Browser: Zen Browser${NC}" ;;
+        2) echo "helium" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Helium Browser${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_browser
+           return
+    esac
+    sleep 1
 }
 
 select_desktop() {
@@ -455,6 +477,34 @@ remove_packages() {
     fi
 }
 
+install_browser() {
+    local browser=$(cat "$STATE_DIR/browser")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                sudo apt update
+                sudo apt install -y helium-bin
+                ;;
+        esac
+    elif [[ "$distro" == "arch" ]]; then
+        case "$browser" in
+            "zen")
+                flatpak install -y flathub app.zen_browser.zen
+                ;;
+            "helium")
+                sudo pacman -S --noconfirm helium-browser-bin
+                ;;
+        esac
+    fi
+}
+
 ask_reboot() {
     echo ""
     echo "${GREEN}Instalação concluída com sucesso!${NC}"
@@ -483,6 +533,7 @@ main() {
     setup_zram
     setup_btrfs_compression
     setup_package_managers
+    install_waydroid
     install_browser
     setup_performance_vars
     remove_packages
