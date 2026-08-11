@@ -137,37 +137,50 @@ select_desktop() {
 select_browser() {
     clear_screen
     show_section "SELECIONE O BROWSER"
-    show_option "1" "Zen Browser (Flatpak)"
-    show_option "2" "Helium Browser"
-    show_option "3" "Firefox (Flatpak)"
-    show_option "4" "Google Chrome (Flatpak)"
-    echo ""
-    read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
+    local distro=$(cat "$STATE_DIR/distro")
     
-    case "$browser_opt" in
-        1|"") echo "zen" > "$STATE_DIR/browser"
-             echo "${GREEN}Browser: Zen Browser${NC}" ;;
-        2) 
-            local distro=$(cat "$STATE_DIR/distro")
-            if [[ "$distro" == "almalinux" ]]; then
-                echo "${RED}Helium Browser não está disponível para AlmaLinux.${NC}"
-                sleep 2
-                select_browser
-                return
-            else
-                echo "helium" > "$STATE_DIR/browser"
-                echo "${GREEN}Browser: Helium Browser${NC}"
-            fi
-            ;;
-        3) echo "firefox" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Firefox${NC}" ;;
-        4) echo "chrome" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Google Chrome${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_browser
-           return
-    esac
+    if [[ "$distro" == "almalinux" ]]; then
+        show_option "1" "Zen Browser (Flatpak)"
+        show_option "2" "Firefox (Flatpak)"
+        show_option "3" "Google Chrome (Flatpak)"
+        echo ""
+        read -p "Opção [1-3] (Enter para Zen Browser): " browser_opt
+        
+        case "$browser_opt" in
+            1|"") echo "zen" > "$STATE_DIR/browser"
+                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
+            2) echo "firefox" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Firefox${NC}" ;;
+            3) echo "chrome" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Google Chrome${NC}" ;;
+            *) echo "${RED}Opção inválida.${NC}"
+               sleep 1
+               select_browser
+               return
+        esac
+    else
+        show_option "1" "Zen Browser (Flatpak)"
+        show_option "2" "Helium Browser"
+        show_option "3" "Firefox (Flatpak)"
+        show_option "4" "Google Chrome (Flatpak)"
+        echo ""
+        read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
+        
+        case "$browser_opt" in
+            1|"") echo "zen" > "$STATE_DIR/browser"
+                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
+            2) echo "helium" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Helium Browser${NC}" ;;
+            3) echo "firefox" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Firefox${NC}" ;;
+            4) echo "chrome" > "$STATE_DIR/browser"
+               echo "${GREEN}Browser: Google Chrome${NC}" ;;
+            *) echo "${RED}Opção inválida.${NC}"
+               sleep 1
+               select_browser
+               return
+        esac
+    fi
     sleep 1
 }
 
@@ -755,16 +768,16 @@ install_nvidia_debian() {
     
     if [ -f /etc/os-release ]; then
         source /etc/os-release
-        local distro_name="${VERSION_CODENAME:-}"
+        local debian_version="${VERSION_ID:-}"
         
-        if [ -z "$distro_name" ]; then
-            echo "${RED}Erro: Não foi possível detectar o codinome do Debian a partir do /etc/os-release${NC}"
+        if [ -z "$debian_version" ]; then
+            echo "${RED}Erro: Não foi possível detectar a versão do Debian a partir do /etc/os-release${NC}"
             return 1
         fi
         
-        echo "${YELLOW}Detectado Debian ${VERSION_ID} (${distro_name})${NC}"
+        echo "${YELLOW}Detectado Debian ${debian_version}${NC}"
         
-        wget https://developer.download.nvidia.com/compute/cuda/repos/${distro_name}/x86_64/cuda-keyring_1.1-1_all.deb
+        wget https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt update
         sudo apt -y install nvidia-open
