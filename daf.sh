@@ -174,6 +174,9 @@ select_office() {
     show_option "3" "Kdenlive (Editor de vídeo)"
     show_option "4" "OBS Studio (Gravação/Streaming)"
     show_option "5" "Obsidian (Notas/Knowledge base)"
+    show_option "6" "Chatterino (Chat para Twitch)"
+    show_option "7" "Upscayl (Upscaling de imagens com IA)"
+    show_option "8" "HandBrake (Conversor de vídeos)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a office_opts
@@ -190,6 +193,9 @@ select_office() {
                 3) office_list="${office_list} kdenlive" ;;
                 4) office_list="${office_list} obs" ;;
                 5) office_list="${office_list} obsidian" ;;
+                6) office_list="${office_list} chatterino" ;;
+                7) office_list="${office_list} upscayl" ;;
+                8) office_list="${office_list} handbrake" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -209,6 +215,7 @@ select_games() {
     show_option "3" "Prism Launcher (Minecraft)"
     show_option "4" "Sober (Roblox)"
     show_option "5" "Faugus Launcher"
+    show_option "6" "Proton Tricks (Gerenciador de dependências para Proton/Wine)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a games_opts
@@ -225,6 +232,7 @@ select_games() {
                 3) games_list="${games_list} prism" ;;
                 4) games_list="${games_list} sober" ;;
                 5) games_list="${games_list} faugus" ;;
+                6) games_list="${games_list} protontricks" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -505,6 +513,15 @@ install_office() {
             obsidian)
                 flatpak install --user -y flathub md.obsidian.Obsidian
                 ;;
+            chatterino)
+                flatpak install --user -y flathub com.chatterino.chatterino
+                ;;
+            upscayl)
+                flatpak install --user -y flathub org.upscayl.Upscayl
+                ;;
+            handbrake)
+                flatpak install --user -y flathub fr.handbrake.ghb
+                ;;
         esac
     done
     
@@ -539,6 +556,9 @@ install_games() {
                 ;;
             faugus)
                 flatpak install --user -y flathub io.github.Faugus.faugus-launcher
+                ;;
+            protontricks)
+                flatpak install --user -y flathub com.github.Matoking.protontricks
                 ;;
         esac
     done
