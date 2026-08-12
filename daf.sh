@@ -49,8 +49,6 @@ detect_distro() {
         echo "debian" > "$STATE_DIR/distro"
     elif [ -f /etc/arch-release ]; then
         echo "arch" > "$STATE_DIR/distro"
-    elif [ -f /etc/almalinux-release ]; then
-        echo "almalinux" > "$STATE_DIR/distro"
     else
         echo "unknown" > "$STATE_DIR/distro"
     fi
@@ -86,7 +84,7 @@ select_desktop() {
     
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$distro" == "debian" || "$distro" == "almalinux" ]]; then
+    if [[ "$distro" == "debian" ]]; then
         show_option "1" "GNOME"
         show_option "2" "KDE Plasma"
         show_option "3" "Nenhum"
@@ -156,25 +154,6 @@ select_browser() {
             3) echo "firefox" > "$STATE_DIR/browser"
                echo "${GREEN}Browser: Firefox${NC}" ;;
             4) echo "chrome" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Google Chrome${NC}" ;;
-            *) echo "${RED}Opção inválida.${NC}"
-               sleep 1
-               select_browser
-               return
-        esac
-    elif [[ "$distro" == "almalinux" ]]; then
-        show_option "1" "Zen Browser (Flatpak)"
-        show_option "2" "Firefox (Flatpak)"
-        show_option "3" "Google Chrome (Flatpak)"
-        echo ""
-        read -p "Opção [1-3] (Enter para Zen Browser): " browser_opt
-        
-        case "$browser_opt" in
-            1|"") echo "zen" > "$STATE_DIR/browser"
-                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
-            2) echo "firefox" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Firefox${NC}" ;;
-            3) echo "chrome" > "$STATE_DIR/browser"
                echo "${GREEN}Browser: Google Chrome${NC}" ;;
             *) echo "${RED}Opção inválida.${NC}"
                sleep 1
@@ -318,23 +297,6 @@ setup_sources() {
             
             sudo pacman -Syu --noconfirm
             ;;
-            
-        almalinux)
-            echo "${YELLOW}Adicionando EPEL...${NC}"
-            sudo dnf install -y epel-release
-            
-            echo "${YELLOW}Adicionando RPM Fusion...${NC}"
-            local rhel_version=$(rpm -E %rhel)
-            sudo dnf install --nogpgcheck -y \
-                https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${rhel_version}.noarch.rpm \
-                https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${rhel_version}.noarch.rpm
-            
-            echo "${YELLOW}Habilitando CRB (CodeReady Builder)...${NC}"
-            sudo /usr/bin/crb enable
-            
-            sudo dnf update -y
-            sudo dnf upgrade -y
-            ;;
     esac
 }
 
@@ -347,9 +309,6 @@ install_base() {
             ;;
         arch)
             sudo pacman -S --noconfirm podman neovim fastfetch gamemode
-            ;;
-        almalinux)
-            sudo dnf install -y podman neovim gamemode fastfetch
             ;;
     esac
 }
@@ -400,22 +359,6 @@ setup_security() {
             sudo systemctl start fwupd
             echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
             ;;
-            
-        almalinux)
-            echo "${YELLOW}Instalando e configurando Firewalld...${NC}"
-            sudo dnf install -y firewalld
-            sudo systemctl enable firewalld
-            sudo systemctl start firewalld
-            echo "${GREEN}✓ Firewalld instalado e habilitado${NC}"
-            
-            echo "${YELLOW}Instalando fwupd...${NC}"
-            sudo dnf install -y fwupd
-            sudo systemctl enable fwupd
-            sudo systemctl start fwupd
-            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
-            
-            echo "${YELLOW}ℹ AppArmor não é suportado no AlmaLinux (usa SELinux)${NC}"
-            ;;
     esac
     
     echo ""
@@ -439,10 +382,6 @@ setup_package_managers() {
             ;;
         arch)
             sudo pacman -S --noconfirm flatpak
-            flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-            ;;
-        almalinux)
-            sudo dnf install -y flatpak
             flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
             ;;
     esac
@@ -491,24 +430,6 @@ install_desktop() {
                     ;;
             esac
             ;;
-            
-        almalinux)
-            case "$desktop" in
-                gnome)
-                    sudo dnf install -y gnome-initial-setup gnome-software gnome-tweaks gnome-disk-utility ptyxis
-                    sudo systemctl enable gdm
-                    sudo systemctl set-default graphical.target
-                    ;;
-                kde)
-                    sudo dnf install -y sddm plasma-desktop konsole dolphin
-                    sudo systemctl enable sddm
-                    sudo systemctl set-default graphical.target
-                    ;;
-                none)
-                    echo "${YELLOW}Nenhum desktop instalado.${NC}"
-                    ;;
-            esac
-            ;;
     esac
 }
 
@@ -544,20 +465,6 @@ install_browser() {
                     ;;
                 helium)
                     sudo pacman -S --noconfirm helium-browser-bin
-                    ;;
-                firefox)
-                    flatpak install --user -y flathub org.mozilla.firefox
-                    ;;
-                chrome)
-                    flatpak install --user -y flathub com.google.Chrome
-                    ;;
-            esac
-            ;;
-            
-        almalinux)
-            case "$browser" in
-                zen)
-                    flatpak install --user -y flathub app.zen_browser.zen
                     ;;
                 firefox)
                     flatpak install --user -y flathub org.mozilla.firefox
@@ -823,18 +730,6 @@ install_gpu_drivers() {
                     ;;
             esac
             ;;
-            
-        almalinux)
-            case "$gpu" in
-                intel|amd)
-                    sudo dnf install -y mesa-vulkan-drivers
-                    ;;
-                nvidia)
-                    sudo dnf install -y almalinux-release-nvidia-driver
-                    sudo dnf install -y nvidia-driver
-                    ;;
-            esac
-            ;;
     esac
 }
 
@@ -862,9 +757,6 @@ install_cpu_microcode() {
                     sudo pacman -S --noconfirm amd-ucode
                     ;;
             esac
-            ;;
-        almalinux)
-            sudo dnf install -y microcode_ctl
             ;;
     esac
 }
