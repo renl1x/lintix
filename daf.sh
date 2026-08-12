@@ -139,9 +139,9 @@ select_produtividade() {
     echo ""
     show_option "1" "OnlyOffice (Suite de escritório)"
     show_option "2" "Obsidian (Notas/Knowledge base)"
-    show_option "3" "VSCodium (Editor de código)"
-    show_option "4" "Zen Browser (Navegador)"
-    show_option "5" "Helium Browser"
+    show_option "3" "Zen Browser (Navegador leve e minimalista)"
+    show_option "4" "Helium Browser (Navegador focado em performance)"
+    show_option "5" "Upscayl (Upscaling de imagens com IA)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a prod_opts
@@ -155,9 +155,9 @@ select_produtividade() {
             case "$opt" in
                 1) prod_list="${prod_list} onlyoffice" ;;
                 2) prod_list="${prod_list} obsidian" ;;
-                3) prod_list="${prod_list} codium" ;;
-                4) prod_list="${prod_list} zen" ;;
-                5) prod_list="${prod_list} helium" ;;
+                3) prod_list="${prod_list} zen" ;;
+                4) prod_list="${prod_list} helium" ;;
+                5) prod_list="${prod_list} upscayl" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -172,12 +172,11 @@ select_multimidia() {
     show_section "MULTIMÍDIA"
     echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
     echo ""
-    show_option "1" "GIMP (Editor de imagens)"
-    show_option "2" "Kdenlive (Editor de vídeo)"
-    show_option "3" "OBS Studio (Gravação/Streaming)"
-    show_option "4" "Upscayl (Upscaling de imagens com IA)"
-    show_option "5" "HandBrake (Conversor de vídeos)"
-    show_option "6" "Audacity (Editor de áudio)"
+    show_option "1" "GIMP (Editor de imagens profissional)"
+    show_option "2" "Kdenlive (Editor de vídeo não-linear)"
+    show_option "3" "OBS Studio (Gravação e streaming de tela)"
+    show_option "4" "HandBrake (Conversor de vídeos e áudios)"
+    show_option "5" "Audacity (Editor e gravador de áudio)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a multi_opts
@@ -192,9 +191,8 @@ select_multimidia() {
                 1) multi_list="${multi_list} gimp" ;;
                 2) multi_list="${multi_list} kdenlive" ;;
                 3) multi_list="${multi_list} obs" ;;
-                4) multi_list="${multi_list} upscayl" ;;
-                5) multi_list="${multi_list} handbrake" ;;
-                6) multi_list="${multi_list} audacity" ;;
+                4) multi_list="${multi_list} handbrake" ;;
+                5) multi_list="${multi_list} audacity" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -209,11 +207,11 @@ select_games() {
     show_section "JOGOS"
     echo "  Selecione os jogos/plataformas que deseja instalar (escolha múltiplos):"
     echo ""
-    show_option "1" "Steam"
-    show_option "2" "Proton Plus"
-    show_option "3" "Prism Launcher (Minecraft)"
-    show_option "4" "Sober (Roblox)"
-    show_option "5" "Heroic Games Launcher"
+    show_option "1" "Steam (Loja e plataforma de jogos)"
+    show_option "2" "Proton Plus (Gerenciador de compatibilidade Proton)"
+    show_option "3" "Prism Launcher (Launcher alternativo para Minecraft)"
+    show_option "4" "Sober (Cliente para Roblox no Linux)"
+    show_option "5" "Heroic Games Launcher (Launcher para Epic/GOG)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a games_opts
@@ -244,12 +242,11 @@ select_extras() {
     show_section "EXTRAS"
     echo "  Selecione os aplicativos extras que deseja instalar (escolha múltiplos):"
     echo ""
-    show_option "1" "GPU Viewer (Monitoramento de GPU)"
-    show_option "2" "BoxBuddyRS (Gerenciador de box)"
-    show_option "3" "CPU-X (Informações da CPU)"
-    show_option "4" "Chatterino (Chat para Twitch)"
-    show_option "5" "Alpaca (Cliente para LLMs)"
-    show_option "6" "Gear Lever (Gerenciador de jogos da Heroic/Epic)"
+    show_option "1" "DistroShelf (Gerenciador de ISOs de distribuições)"
+    show_option "2" "VSCodium (Editor de código open-source sem telemetria)"
+    show_option "3" "Bitwarden (Gerenciador de senhas open-source)"
+    show_option "4" "Alpaca (Cliente para LLMs e IA)"
+    show_option "5" "Gear Lever (Gerenciador de jogos da Heroic/Epic)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a extras_opts
@@ -261,12 +258,11 @@ select_extras() {
         local extras_list=""
         for opt in "${extras_opts[@]}"; do
             case "$opt" in
-                1) extras_list="${extras_list} gpuviewer" ;;
-                2) extras_list="${extras_list} boxbuddy" ;;
-                3) extras_list="${extras_list} cpux" ;;
-                4) extras_list="${extras_list} chatterino" ;;
-                5) extras_list="${extras_list} alpaca" ;;
-                6) extras_list="${extras_list} gearlever" ;;
+                1) extras_list="${extras_list} distroshelf" ;;
+                2) extras_list="${extras_list} codium" ;;
+                3) extras_list="${extras_list} bitwarden" ;;
+                4) extras_list="${extras_list} alpaca" ;;
+                5) extras_list="${extras_list} gearlever" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -281,11 +277,31 @@ select_ferramentas() {
     show_section "FERRAMENTAS"
     echo "  Selecione as ferramentas que deseja instalar (escolha múltiplos):"
     echo ""
-    show_option "1" "Yay (AUR helper - Arch)"
-    show_option "2" "Snap (Universal package manager - Debian)"
-    show_option "3" "Pacstall (AUR-like for Debian)"
-    show_option "4" "Gamescope (Micro-compositor para jogos)"
-    show_option "5" "Waydroid (Android em Wayland)"
+    
+    local distro=$(cat "$STATE_DIR/distro")
+    local opt_num=1
+    
+    if [[ "$distro" == "arch" ]]; then
+        show_option "$opt_num" "Yay (AUR helper - Arch)"
+        ((opt_num++))
+    fi
+    
+    if [[ "$distro" == "debian" ]]; then
+        show_option "$opt_num" "Snap (Gerenciador de pacotes universal - Debian)"
+        ((opt_num++))
+        show_option "$opt_num" "Pacstall (Gerenciador de pacotes estilo AUR - Debian)"
+        ((opt_num++))
+    fi
+    
+    if [[ "$distro" == "arch" ]]; then
+        show_option "$opt_num" "Gamescope (Micro-compositor para jogos - Arch)"
+        ((opt_num++))
+        show_option "$opt_num" "Waydroid (Android em Wayland - Arch)"
+        ((opt_num++))
+    fi
+    
+    show_option "$opt_num" "Nix (Gerenciador de pacotes funcional)"
+    
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a ferramentas_opts
@@ -297,11 +313,37 @@ select_ferramentas() {
         local ferramentas_list=""
         for opt in "${ferramentas_opts[@]}"; do
             case "$opt" in
-                1) ferramentas_list="${ferramentas_list} yay" ;;
-                2) ferramentas_list="${ferramentas_list} snap" ;;
-                3) ferramentas_list="${ferramentas_list} pacstall" ;;
-                4) ferramentas_list="${ferramentas_list} gamescope" ;;
-                5) ferramentas_list="${ferramentas_list} waydroid" ;;
+                1) 
+                    if [[ "$distro" == "arch" ]]; then
+                        ferramentas_list="${ferramentas_list} yay"
+                    fi
+                    ;;
+                2)
+                    if [[ "$distro" == "debian" ]]; then
+                        ferramentas_list="${ferramentas_list} snap"
+                    elif [[ "$distro" == "arch" ]]; then
+                        ferramentas_list="${ferramentas_list} gamescope"
+                    fi
+                    ;;
+                3)
+                    if [[ "$distro" == "debian" ]]; then
+                        ferramentas_list="${ferramentas_list} pacstall"
+                    elif [[ "$distro" == "arch" ]]; then
+                        ferramentas_list="${ferramentas_list} waydroid"
+                    fi
+                    ;;
+                4)
+                    if [[ "$distro" == "arch" ]]; then
+                        ferramentas_list="${ferramentas_list} nix"
+                    else
+                        ferramentas_list="${ferramentas_list} nix"
+                    fi
+                    ;;
+                5)
+                    if [[ "$distro" == "arch" ]]; then
+                        ferramentas_list="${ferramentas_list} nix"
+                    fi
+                    ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -498,9 +540,6 @@ install_produtividade() {
             obsidian)
                 flatpak install --user -y flathub md.obsidian.Obsidian
                 ;;
-            codium)
-                flatpak install --user -y flathub com.vscodium.codium
-                ;;
             zen)
                 flatpak install --user -y flathub app.zen_browser.zen
                 ;;
@@ -513,6 +552,9 @@ install_produtividade() {
                 else
                     sudo pacman -S --noconfirm helium-browser-bin
                 fi
+                ;;
+            upscayl)
+                flatpak install --user -y flathub org.upscayl.Upscayl
                 ;;
         esac
     done
@@ -542,9 +584,6 @@ install_multimidia() {
                 ;;
             obs)
                 flatpak install --user -y flathub com.obsproject.Studio
-                ;;
-            upscayl)
-                flatpak install --user -y flathub org.upscayl.Upscayl
                 ;;
             handbrake)
                 flatpak install --user -y flathub fr.handbrake.ghb
@@ -607,17 +646,14 @@ install_extras() {
     
     for app in $extras; do
         case "$app" in
-            gpuviewer)
-                flatpak install --user -y flathub io.github.arunsivaramanneo.GPUViewer
+            distroshelf)
+                flatpak install --user -y flathub com.ranfdev.DistroShelf
                 ;;
-            boxbuddy)
-                flatpak install --user -y flathub io.github.dvlv.boxbuddyrs
+            codium)
+                flatpak install --user -y flathub com.vscodium.codium
                 ;;
-            cpux)
-                flatpak install --user -y flathub io.github.thetumultuousunicornofdarkness.cpu-x
-                ;;
-            chatterino)
-                flatpak install --user -y flathub com.chatterino.chatterino
+            bitwarden)
+                flatpak install --user -y flathub com.bitwarden.desktop
                 ;;
             alpaca)
                 flatpak install --user -y flathub com.jeffser.Alpaca
@@ -691,6 +727,23 @@ install_ferramentas() {
                     echo "${GREEN}✓ Waydroid instalado!${NC}"
                 else
                     echo "${YELLOW}⚠ Waydroid está disponível apenas para Arch Linux. Pulando...${NC}"
+                fi
+                ;;
+            nix)
+                if [[ "$distro" == "arch" ]]; then
+                    echo "${YELLOW}Instalando Nix...${NC}"
+                    sudo pacman -S --noconfirm nix
+                    sudo systemctl enable nix-daemon
+                    sudo systemctl start nix-daemon
+                    echo "${GREEN}✓ Nix instalado e habilitado!${NC}"
+                elif [[ "$distro" == "debian" ]]; then
+                    echo "${YELLOW}Instalando Nix...${NC}"
+                    sudo apt install -y nix-bin
+                    sudo systemctl enable nix-daemon
+                    sudo systemctl start nix-daemon
+                    echo "${GREEN}✓ Nix instalado e habilitado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Distribuição não suportada para Nix. Pulando...${NC}"
                 fi
                 ;;
         esac
