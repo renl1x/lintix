@@ -134,33 +134,28 @@ select_desktop() {
 
 select_browser() {
     clear_screen
-    show_section "SELECIONE O BROWSER"
+    show_section "BROWSERS"
+    show_option "1" "Zen Browser (Flatpak)"
+    show_option "2" "Helium Browser"
+    show_option "3" "Firefox (Flatpak)"
+    show_option "4" "Google Chrome (Flatpak)"
+    echo ""
+    read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
     
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" || "$distro" == "arch" ]]; then
-        show_option "1" "Zen Browser (Flatpak)"
-        show_option "2" "Helium Browser"
-        show_option "3" "Firefox (Flatpak)"
-        show_option "4" "Google Chrome (Flatpak)"
-        echo ""
-        read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
-        
-        case "$browser_opt" in
-            1|"") echo "zen" > "$STATE_DIR/browser"
-                 echo "${GREEN}Browser: Zen Browser${NC}" ;;
-            2) echo "helium" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Helium Browser${NC}" ;;
-            3) echo "firefox" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Firefox${NC}" ;;
-            4) echo "chrome" > "$STATE_DIR/browser"
-               echo "${GREEN}Browser: Google Chrome${NC}" ;;
-            *) echo "${RED}Opção inválida.${NC}"
-               sleep 1
-               select_browser
-               return
-        esac
-    fi
+    case "$browser_opt" in
+        1|"") echo "zen" > "$STATE_DIR/browser"
+             echo "${GREEN}Browser: Zen Browser${NC}" ;;
+        2) echo "helium" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Helium Browser${NC}" ;;
+        3) echo "firefox" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Firefox${NC}" ;;
+        4) echo "chrome" > "$STATE_DIR/browser"
+           echo "${GREEN}Browser: Google Chrome${NC}" ;;
+        *) echo "${RED}Opção inválida.${NC}"
+           sleep 1
+           select_browser
+           return
+    esac
     sleep 1
 }
 
@@ -172,7 +167,7 @@ select_produtividade() {
     show_option "1" "OnlyOffice (Suite de escritório)"
     show_option "2" "Obsidian (Notas/Knowledge base)"
     show_option "3" "Typora (Editor de Markdown)"
-    show_option "4" "VSCodium (Editor de código - VS Code sem telemetria)"
+    show_option "4" "VSCodium (Editor de código)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a prod_opts
@@ -246,7 +241,7 @@ select_games() {
     show_option "3" "Prism Launcher (Minecraft)"
     show_option "4" "Sober (Roblox)"
     show_option "5" "Faugus Launcher"
-    show_option "6" "Proton Tricks (Gerenciador de dependências para Proton/Wine)"
+    show_option "6" "Proton Tricks"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a games_opts
@@ -273,10 +268,41 @@ select_games() {
     sleep 1
 }
 
+select_extras() {
+    clear_screen
+    show_section "EXTRAS"
+    echo "  Selecione os aplicativos extras que deseja instalar (escolha múltiplos):"
+    echo ""
+    show_option "1" "GPU Viewer (Monitoramento de GPU)"
+    show_option "2" "BoxBuddyRS (Gerenciador de box)"
+    show_option "3" "CPU-X (Informações da CPU)"
+    echo ""
+    echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
+    read -p "Opções: " -a extras_opts
+    
+    if [[ ${#extras_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/extras"
+        echo "${GREEN}Nenhum aplicativo extra selecionado.${NC}"
+    else
+        local extras_list=""
+        for opt in "${extras_opts[@]}"; do
+            case "$opt" in
+                1) extras_list="${extras_list} gpuviewer" ;;
+                2) extras_list="${extras_list} boxbuddy" ;;
+                3) extras_list="${extras_list} cpux" ;;
+                *) echo "${RED}Opção inválida: $opt${NC}" ;;
+            esac
+        done
+        echo "$extras_list" > "$STATE_DIR/extras"
+        echo "${GREEN}Aplicativo(s) extra(s) selecionado(s)!${NC}"
+    fi
+    sleep 1
+}
+
 select_repos() {
     clear_screen
-    show_section "REPOSITÓRIOS OPCIONAIS"
-    echo "  Selecione os repositórios/gerenciadores que deseja instalar (escolha múltiplos):"
+    show_section "GERENCIADORES"
+    echo "  Selecione os gerenciadores que deseja instalar (escolha múltiplos):"
     echo ""
     show_option "1" "Yay (AUR helper - Arch)"
     show_option "2" "Snap (Universal package manager - Debian)"
@@ -287,7 +313,7 @@ select_repos() {
     
     if [[ ${#repos_opts[@]} -eq 0 ]]; then
         echo "none" > "$STATE_DIR/repos"
-        echo "${GREEN}Nenhum repositório opcional selecionado.${NC}"
+        echo "${GREEN}Nenhum gerenciador selecionado.${NC}"
     else
         local repos_list=""
         for opt in "${repos_opts[@]}"; do
@@ -299,7 +325,7 @@ select_repos() {
             esac
         done
         echo "$repos_list" > "$STATE_DIR/repos"
-        echo "${GREEN}Repositório(s) opcional(is) selecionado(s)!${NC}"
+        echo "${GREEN}Gerenciador(es) selecionado(s)!${NC}"
     fi
     sleep 1
 }
@@ -474,44 +500,26 @@ install_desktop() {
 
 install_browser() {
     local browser=$(cat "$STATE_DIR/browser")
-    local distro=$(cat "$STATE_DIR/distro")
     
-    case "$distro" in
-        debian)
-            case "$browser" in
-                zen)
-                    flatpak install --user -y flathub app.zen_browser.zen
-                    ;;
-                helium)
-                    curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-                    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-                    sudo apt update
-                    sudo apt install -y helium-bin
-                    ;;
-                firefox)
-                    flatpak install --user -y flathub org.mozilla.firefox
-                    ;;
-                chrome)
-                    flatpak install --user -y flathub com.google.Chrome
-                    ;;
-            esac
+    case "$browser" in
+        zen)
+            flatpak install --user -y flathub app.zen_browser.zen
             ;;
-            
-        arch)
-            case "$browser" in
-                zen)
-                    flatpak install --user -y flathub app.zen_browser.zen
-                    ;;
-                helium)
-                    sudo pacman -S --noconfirm helium-browser-bin
-                    ;;
-                firefox)
-                    flatpak install --user -y flathub org.mozilla.firefox
-                    ;;
-                chrome)
-                    flatpak install --user -y flathub com.google.Chrome
-                    ;;
-            esac
+        helium)
+            if [[ "$(cat "$STATE_DIR/distro")" == "debian" ]]; then
+                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                sudo apt update
+                sudo apt install -y helium-bin
+            else
+                sudo pacman -S --noconfirm helium-browser-bin
+            fi
+            ;;
+        firefox)
+            flatpak install --user -y flathub org.mozilla.firefox
+            ;;
+        chrome)
+            flatpak install --user -y flathub com.google.Chrome
             ;;
     esac
 }
@@ -627,6 +635,35 @@ install_games() {
     echo ""
 }
 
+install_extras() {
+    local extras=$(cat "$STATE_DIR/extras")
+    
+    if [[ "$extras" == "none" ]]; then
+        return
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Instalando aplicativos Extras${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    for app in $extras; do
+        case "$app" in
+            gpuviewer)
+                flatpak install --user -y flathub io.github.arunsivaramanneo.GPUViewer
+                ;;
+            boxbuddy)
+                flatpak install --user -y flathub io.github.dvlv.boxbuddyrs
+                ;;
+            cpux)
+                flatpak install --user -y flathub io.github.thetumultuousunicornofdarkness.cpu-x
+                ;;
+        esac
+    done
+    
+    echo "${GREEN}✓ Aplicativos extras instalados!${NC}"
+    echo ""
+}
+
 install_repos() {
     local repos=$(cat "$STATE_DIR/repos")
     local distro=$(cat "$STATE_DIR/distro")
@@ -636,7 +673,7 @@ install_repos() {
     fi
     
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando repositórios opcionais${NC}"
+    echo "${GREEN}► Instalando gerenciadores${NC}"
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
     for repo in $repos; do
@@ -879,6 +916,7 @@ main() {
     select_produtividade
     select_multimidia
     select_games
+    select_extras
     select_repos
     setup_sources
     install_base
@@ -891,6 +929,7 @@ main() {
     install_produtividade
     install_multimidia
     install_games
+    install_extras
     install_repos
     setup_network
     setup_zram
