@@ -132,33 +132,6 @@ select_desktop() {
     sleep 2
 }
 
-select_browser() {
-    clear_screen
-    show_section "BROWSERS"
-    show_option "1" "Zen Browser (Flatpak)"
-    show_option "2" "Helium Browser"
-    show_option "3" "Firefox (Flatpak)"
-    show_option "4" "Google Chrome (Flatpak)"
-    echo ""
-    read -p "Opção [1-4] (Enter para Zen Browser): " browser_opt
-    
-    case "$browser_opt" in
-        1|"") echo "zen" > "$STATE_DIR/browser"
-             echo "${GREEN}Browser: Zen Browser${NC}" ;;
-        2) echo "helium" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Helium Browser${NC}" ;;
-        3) echo "firefox" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Firefox${NC}" ;;
-        4) echo "chrome" > "$STATE_DIR/browser"
-           echo "${GREEN}Browser: Google Chrome${NC}" ;;
-        *) echo "${RED}Opção inválida.${NC}"
-           sleep 1
-           select_browser
-           return
-    esac
-    sleep 1
-}
-
 select_produtividade() {
     clear_screen
     show_section "PRODUTIVIDADE"
@@ -166,10 +139,11 @@ select_produtividade() {
     echo ""
     show_option "1" "OnlyOffice (Suite de escritório)"
     show_option "2" "Obsidian (Notas/Knowledge base)"
-    show_option "3" "Typora (Editor de Markdown)"
-    show_option "4" "VSCodium (Editor de código)"
+    show_option "3" "VSCodium (Editor de código)"
+    show_option "4" "Zen Browser (Navegador)"
+    show_option "5" "Helium Browser"
     echo ""
-    echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
+    echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a prod_opts
     
     if [[ ${#prod_opts[@]} -eq 0 ]]; then
@@ -181,8 +155,9 @@ select_produtividade() {
             case "$opt" in
                 1) prod_list="${prod_list} onlyoffice" ;;
                 2) prod_list="${prod_list} obsidian" ;;
-                3) prod_list="${prod_list} typora" ;;
-                4) prod_list="${prod_list} codium" ;;
+                3) prod_list="${prod_list} codium" ;;
+                4) prod_list="${prod_list} zen" ;;
+                5) prod_list="${prod_list} helium" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -203,7 +178,6 @@ select_multimidia() {
     show_option "4" "Upscayl (Upscaling de imagens com IA)"
     show_option "5" "HandBrake (Conversor de vídeos)"
     show_option "6" "Audacity (Editor de áudio)"
-    show_option "7" "Chatterino (Chat para Twitch)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a multi_opts
@@ -221,7 +195,6 @@ select_multimidia() {
                 4) multi_list="${multi_list} upscayl" ;;
                 5) multi_list="${multi_list} handbrake" ;;
                 6) multi_list="${multi_list} audacity" ;;
-                7) multi_list="${multi_list} chatterino" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -240,8 +213,7 @@ select_games() {
     show_option "2" "Proton Plus"
     show_option "3" "Prism Launcher (Minecraft)"
     show_option "4" "Sober (Roblox)"
-    show_option "5" "Faugus Launcher"
-    show_option "6" "Proton Tricks"
+    show_option "5" "Heroic Games Launcher"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a games_opts
@@ -257,8 +229,7 @@ select_games() {
                 2) games_list="${games_list} proton" ;;
                 3) games_list="${games_list} prism" ;;
                 4) games_list="${games_list} sober" ;;
-                5) games_list="${games_list} faugus" ;;
-                6) games_list="${games_list} protontricks" ;;
+                5) games_list="${games_list} heroic" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -276,6 +247,8 @@ select_extras() {
     show_option "1" "GPU Viewer (Monitoramento de GPU)"
     show_option "2" "BoxBuddyRS (Gerenciador de box)"
     show_option "3" "CPU-X (Informações da CPU)"
+    show_option "4" "Chatterino (Chat para Twitch)"
+    show_option "5" "Alpaca (Cliente para LLMs)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a extras_opts
@@ -290,6 +263,8 @@ select_extras() {
                 1) extras_list="${extras_list} gpuviewer" ;;
                 2) extras_list="${extras_list} boxbuddy" ;;
                 3) extras_list="${extras_list} cpux" ;;
+                4) extras_list="${extras_list} chatterino" ;;
+                5) extras_list="${extras_list} alpaca" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -299,33 +274,35 @@ select_extras() {
     sleep 1
 }
 
-select_repos() {
+select_ferramentas() {
     clear_screen
-    show_section "GERENCIADORES"
-    echo "  Selecione os gerenciadores que deseja instalar (escolha múltiplos):"
+    show_section "FERRAMENTAS"
+    echo "  Selecione as ferramentas que deseja instalar (escolha múltiplos):"
     echo ""
     show_option "1" "Yay (AUR helper - Arch)"
     show_option "2" "Snap (Universal package manager - Debian)"
     show_option "3" "Pacstall (AUR-like for Debian)"
+    show_option "4" "Gamescope (Micro-compositor para jogos)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
-    read -p "Opções: " -a repos_opts
+    read -p "Opções: " -a ferramentas_opts
     
-    if [[ ${#repos_opts[@]} -eq 0 ]]; then
-        echo "none" > "$STATE_DIR/repos"
-        echo "${GREEN}Nenhum gerenciador selecionado.${NC}"
+    if [[ ${#ferramentas_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/ferramentas"
+        echo "${GREEN}Nenhuma ferramenta selecionada.${NC}"
     else
-        local repos_list=""
-        for opt in "${repos_opts[@]}"; do
+        local ferramentas_list=""
+        for opt in "${ferramentas_opts[@]}"; do
             case "$opt" in
-                1) repos_list="${repos_list} yay" ;;
-                2) repos_list="${repos_list} snap" ;;
-                3) repos_list="${repos_list} pacstall" ;;
+                1) ferramentas_list="${ferramentas_list} yay" ;;
+                2) ferramentas_list="${ferramentas_list} snap" ;;
+                3) ferramentas_list="${ferramentas_list} pacstall" ;;
+                4) ferramentas_list="${ferramentas_list} gamescope" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
-        echo "$repos_list" > "$STATE_DIR/repos"
-        echo "${GREEN}Gerenciador(es) selecionado(s)!${NC}"
+        echo "$ferramentas_list" > "$STATE_DIR/ferramentas"
+        echo "${GREEN}Ferramenta(s) selecionada(s)!${NC}"
     fi
     sleep 1
 }
@@ -370,10 +347,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman neovim gamemode fastfetch
+            sudo apt install -y podman distrobox git neovim gamemode fastfetch lshw
             ;;
         arch)
-            sudo pacman -S --noconfirm podman neovim fastfetch gamemode
+            sudo pacman -S --noconfirm podman distrobox git neovim fastfetch gamemode lshw
             ;;
     esac
 }
@@ -498,32 +475,6 @@ install_desktop() {
     esac
 }
 
-install_browser() {
-    local browser=$(cat "$STATE_DIR/browser")
-    
-    case "$browser" in
-        zen)
-            flatpak install --user -y flathub app.zen_browser.zen
-            ;;
-        helium)
-            if [[ "$(cat "$STATE_DIR/distro")" == "debian" ]]; then
-                curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
-                sudo apt update
-                sudo apt install -y helium-bin
-            else
-                sudo pacman -S --noconfirm helium-browser-bin
-            fi
-            ;;
-        firefox)
-            flatpak install --user -y flathub org.mozilla.firefox
-            ;;
-        chrome)
-            flatpak install --user -y flathub com.google.Chrome
-            ;;
-    esac
-}
-
 install_produtividade() {
     local prod=$(cat "$STATE_DIR/produtividade")
     
@@ -543,11 +494,21 @@ install_produtividade() {
             obsidian)
                 flatpak install --user -y flathub md.obsidian.Obsidian
                 ;;
-            typora)
-                flatpak install --user -y flathub io.typora.Typora
-                ;;
             codium)
                 flatpak install --user -y flathub com.vscodium.codium
+                ;;
+            zen)
+                flatpak install --user -y flathub app.zen_browser.zen
+                ;;
+            helium)
+                if [[ "$(cat "$STATE_DIR/distro")" == "debian" ]]; then
+                    curl -fsSL https://raw.githubusercontent.com/imputnet/helium-linux/main/pubkey.asc | sudo gpg --dearmor -o /usr/share/keyrings/helium.gpg
+                    echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/helium.gpg] https://pkg.helium.computer/deb stable main" | sudo tee /etc/apt/sources.list.d/helium.list
+                    sudo apt update
+                    sudo apt install -y helium-bin
+                else
+                    sudo pacman -S --noconfirm helium-browser-bin
+                fi
                 ;;
         esac
     done
@@ -587,9 +548,6 @@ install_multimidia() {
             audacity)
                 flatpak install --user -y flathub org.audacityteam.Audacity
                 ;;
-            chatterino)
-                flatpak install --user -y flathub com.chatterino.chatterino
-                ;;
         esac
     done
     
@@ -622,11 +580,8 @@ install_games() {
             sober)
                 flatpak install --user -y flathub org.vinegarhq.Sober
                 ;;
-            faugus)
-                flatpak install --user -y flathub io.github.Faugus.faugus-launcher
-                ;;
-            protontricks)
-                flatpak install --user -y flathub com.github.Matoking.protontricks
+            heroic)
+                flatpak install --user -y flathub com.heroicgameslauncher.hgl
                 ;;
         esac
     done
@@ -657,6 +612,12 @@ install_extras() {
             cpux)
                 flatpak install --user -y flathub io.github.thetumultuousunicornofdarkness.cpu-x
                 ;;
+            chatterino)
+                flatpak install --user -y flathub com.chatterino.chatterino
+                ;;
+            alpaca)
+                flatpak install --user -y flathub com.jeffser.Alpaca
+                ;;
         esac
     done
     
@@ -664,20 +625,20 @@ install_extras() {
     echo ""
 }
 
-install_repos() {
-    local repos=$(cat "$STATE_DIR/repos")
+install_ferramentas() {
+    local ferramentas=$(cat "$STATE_DIR/ferramentas")
     local distro=$(cat "$STATE_DIR/distro")
     
-    if [[ "$repos" == "none" ]]; then
+    if [[ "$ferramentas" == "none" ]]; then
         return
     fi
     
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando gerenciadores${NC}"
+    echo "${GREEN}► Instalando ferramentas${NC}"
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
-    for repo in $repos; do
-        case "$repo" in
+    for tool in $ferramentas; do
+        case "$tool" in
             yay)
                 if [[ "$distro" == "arch" ]]; then
                     echo "${YELLOW}Instalando Yay (AUR helper)...${NC}"
@@ -705,6 +666,15 @@ install_repos() {
                     echo "${GREEN}✓ Pacstall instalado!${NC}"
                 else
                     echo "${YELLOW}⚠ Pacstall é exclusivo para Debian. Pulando...${NC}"
+                fi
+                ;;
+            gamescope)
+                if [[ "$distro" == "arch" ]]; then
+                    echo "${YELLOW}Instalando Gamescope...${NC}"
+                    sudo pacman -S --noconfirm gamescope
+                    echo "${GREEN}✓ Gamescope instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Gamescope está disponível apenas para Arch Linux. Pulando...${NC}"
                 fi
                 ;;
         esac
@@ -897,46 +867,4 @@ remove_packages() {
 
 ask_reboot() {
     echo ""
-    echo "${GREEN}Instalação concluída com sucesso!${NC}"
-    echo "${YELLOW}Recomenda-se reiniciar o sistema para aplicar todas as configurações.${NC}"
-    if confirm "Deseja reiniciar agora?"; then
-        echo "${GREEN}Reiniciando o sistema...${NC}"
-        sudo reboot
-    else
-        echo "${YELLOW}Lembre-se de reiniciar o sistema posteriormente para aplicar todas as configurações.${NC}"
-    fi
-}
-
-main() {
-    detect_distro
-    detect_gpu
-    detect_cpu
-    select_desktop
-    select_browser
-    select_produtividade
-    select_multimidia
-    select_games
-    select_extras
-    select_repos
-    setup_sources
-    install_base
-    setup_security
-    install_cpu_microcode
-    install_gpu_drivers
-    install_desktop
-    setup_package_managers
-    install_browser
-    install_produtividade
-    install_multimidia
-    install_games
-    install_extras
-    install_repos
-    setup_network
-    setup_zram
-    setup_btrfs_compression
-    setup_performance_vars
-    remove_packages
-    ask_reboot
-}
-
-main
+    echo "${GREEN}Instalação concluída com sucesso
