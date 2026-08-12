@@ -249,6 +249,7 @@ select_extras() {
     show_option "3" "CPU-X (Informações da CPU)"
     show_option "4" "Chatterino (Chat para Twitch)"
     show_option "5" "Alpaca (Cliente para LLMs)"
+    show_option "6" "Gear Lever (Gerenciador de jogos da Heroic/Epic)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a extras_opts
@@ -265,6 +266,7 @@ select_extras() {
                 3) extras_list="${extras_list} cpux" ;;
                 4) extras_list="${extras_list} chatterino" ;;
                 5) extras_list="${extras_list} alpaca" ;;
+                6) extras_list="${extras_list} gearlever" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -283,6 +285,7 @@ select_ferramentas() {
     show_option "2" "Snap (Universal package manager - Debian)"
     show_option "3" "Pacstall (AUR-like for Debian)"
     show_option "4" "Gamescope (Micro-compositor para jogos)"
+    show_option "5" "Waydroid (Android em Wayland)"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a ferramentas_opts
@@ -298,6 +301,7 @@ select_ferramentas() {
                 2) ferramentas_list="${ferramentas_list} snap" ;;
                 3) ferramentas_list="${ferramentas_list} pacstall" ;;
                 4) ferramentas_list="${ferramentas_list} gamescope" ;;
+                5) ferramentas_list="${ferramentas_list} waydroid" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -618,6 +622,9 @@ install_extras() {
             alpaca)
                 flatpak install --user -y flathub com.jeffser.Alpaca
                 ;;
+            gearlever)
+                flatpak install --user -y flathub it.mijorus.gearlever
+                ;;
         esac
     done
     
@@ -675,6 +682,15 @@ install_ferramentas() {
                     echo "${GREEN}✓ Gamescope instalado!${NC}"
                 else
                     echo "${YELLOW}⚠ Gamescope está disponível apenas para Arch Linux. Pulando...${NC}"
+                fi
+                ;;
+            waydroid)
+                if [[ "$distro" == "arch" ]]; then
+                    echo "${YELLOW}Instalando Waydroid...${NC}"
+                    sudo pacman -S --noconfirm waydroid
+                    echo "${GREEN}✓ Waydroid instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Waydroid está disponível apenas para Arch Linux. Pulando...${NC}"
                 fi
                 ;;
         esac
@@ -867,4 +883,44 @@ remove_packages() {
 
 ask_reboot() {
     echo ""
-    echo "${GREEN}Instalação concluída com sucesso
+    echo "${GREEN}Instalação concluída com sucesso!${NC}"
+    echo "${YELLOW}Recomenda-se reiniciar o sistema para aplicar todas as configurações.${NC}"
+    if confirm "Deseja reiniciar agora?"; then
+        echo "${GREEN}Reiniciando o sistema...${NC}"
+        sudo reboot
+    else
+        echo "${YELLOW}Lembre-se de reiniciar o sistema posteriormente para aplicar todas as configurações.${NC}"
+    fi
+}
+
+main() {
+    detect_distro
+    detect_gpu
+    detect_cpu
+    select_desktop
+    select_produtividade
+    select_multimidia
+    select_games
+    select_extras
+    select_ferramentas
+    setup_sources
+    install_base
+    setup_security
+    install_cpu_microcode
+    install_gpu_drivers
+    install_desktop
+    setup_package_managers
+    install_produtividade
+    install_multimidia
+    install_games
+    install_extras
+    install_ferramentas
+    setup_network
+    setup_zram
+    setup_btrfs_compression
+    setup_performance_vars
+    remove_packages
+    ask_reboot
+}
+
+main
