@@ -164,50 +164,81 @@ select_browser() {
     sleep 1
 }
 
-select_office() {
+select_produtividade() {
     clear_screen
-    show_section "APLICATIVOS OFFICE E MULTIMÍDIA"
+    show_section "PRODUTIVIDADE"
     echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
     echo ""
     show_option "1" "OnlyOffice (Suite de escritório)"
-    show_option "2" "GIMP (Editor de imagens)"
-    show_option "3" "Kdenlive (Editor de vídeo)"
-    show_option "4" "OBS Studio (Gravação/Streaming)"
-    show_option "5" "Obsidian (Notas/Knowledge base)"
-    show_option "6" "Chatterino (Chat para Twitch)"
-    show_option "7" "Upscayl (Upscaling de imagens com IA)"
-    show_option "8" "HandBrake (Conversor de vídeos)"
+    show_option "2" "Obsidian (Notas/Knowledge base)"
+    show_option "3" "Typora (Editor de Markdown)"
+    show_option "4" "VSCodium (Editor de código - VS Code sem telemetria)"
     echo ""
-    echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
-    read -p "Opções: " -a office_opts
+    echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
+    read -p "Opções: " -a prod_opts
     
-    if [[ ${#office_opts[@]} -eq 0 ]]; then
-        echo "none" > "$STATE_DIR/office"
-        echo "${GREEN}Nenhum aplicativo office selecionado.${NC}"
+    if [[ ${#prod_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/produtividade"
+        echo "${GREEN}Nenhum aplicativo de produtividade selecionado.${NC}"
     else
-        local office_list=""
-        for opt in "${office_opts[@]}"; do
+        local prod_list=""
+        for opt in "${prod_opts[@]}"; do
             case "$opt" in
-                1) office_list="${office_list} onlyoffice" ;;
-                2) office_list="${office_list} gimp" ;;
-                3) office_list="${office_list} kdenlive" ;;
-                4) office_list="${office_list} obs" ;;
-                5) office_list="${office_list} obsidian" ;;
-                6) office_list="${office_list} chatterino" ;;
-                7) office_list="${office_list} upscayl" ;;
-                8) office_list="${office_list} handbrake" ;;
+                1) prod_list="${prod_list} onlyoffice" ;;
+                2) prod_list="${prod_list} obsidian" ;;
+                3) prod_list="${prod_list} typora" ;;
+                4) prod_list="${prod_list} codium" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
-        echo "$office_list" > "$STATE_DIR/office"
-        echo "${GREEN}Aplicativo(s) office selecionado(s)!${NC}"
+        echo "$prod_list" > "$STATE_DIR/produtividade"
+        echo "${GREEN}Aplicativo(s) de produtividade selecionado(s)!${NC}"
+    fi
+    sleep 1
+}
+
+select_multimidia() {
+    clear_screen
+    show_section "MULTIMÍDIA"
+    echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
+    echo ""
+    show_option "1" "GIMP (Editor de imagens)"
+    show_option "2" "Kdenlive (Editor de vídeo)"
+    show_option "3" "OBS Studio (Gravação/Streaming)"
+    show_option "4" "Upscayl (Upscaling de imagens com IA)"
+    show_option "5" "HandBrake (Conversor de vídeos)"
+    show_option "6" "Audacity (Editor de áudio)"
+    show_option "7" "Chatterino (Chat para Twitch)"
+    echo ""
+    echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
+    read -p "Opções: " -a multi_opts
+    
+    if [[ ${#multi_opts[@]} -eq 0 ]]; then
+        echo "none" > "$STATE_DIR/multimidia"
+        echo "${GREEN}Nenhum aplicativo multimídia selecionado.${NC}"
+    else
+        local multi_list=""
+        for opt in "${multi_opts[@]}"; do
+            case "$opt" in
+                1) multi_list="${multi_list} gimp" ;;
+                2) multi_list="${multi_list} kdenlive" ;;
+                3) multi_list="${multi_list} obs" ;;
+                4) multi_list="${multi_list} upscayl" ;;
+                5) multi_list="${multi_list} handbrake" ;;
+                6) multi_list="${multi_list} audacity" ;;
+                7) multi_list="${multi_list} chatterino" ;;
+                *) echo "${RED}Opção inválida: $opt${NC}" ;;
+            esac
+        done
+        echo "$multi_list" > "$STATE_DIR/multimidia"
+        echo "${GREEN}Aplicativo(s) multimídia selecionado(s)!${NC}"
     fi
     sleep 1
 }
 
 select_games() {
     clear_screen
-    show_section "JOGOS E PLATAFORMAS"
+    show_section "JOGOS"
     echo "  Selecione os jogos/plataformas que deseja instalar (escolha múltiplos):"
     echo ""
     show_option "1" "Steam"
@@ -485,22 +516,51 @@ install_browser() {
     esac
 }
 
-install_office() {
-    local office=$(cat "$STATE_DIR/office")
+install_produtividade() {
+    local prod=$(cat "$STATE_DIR/produtividade")
     
-    if [[ "$office" == "none" ]]; then
+    if [[ "$prod" == "none" ]]; then
         return
     fi
     
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando aplicativos Office${NC}"
+    echo "${GREEN}► Instalando aplicativos de Produtividade${NC}"
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
-    for app in $office; do
+    for app in $prod; do
         case "$app" in
             onlyoffice)
                 flatpak install --user -y flathub org.onlyoffice.desktopeditors
                 ;;
+            obsidian)
+                flatpak install --user -y flathub md.obsidian.Obsidian
+                ;;
+            typora)
+                flatpak install --user -y flathub io.typora.Typora
+                ;;
+            codium)
+                flatpak install --user -y flathub com.vscodium.codium
+                ;;
+        esac
+    done
+    
+    echo "${GREEN}✓ Aplicativos de produtividade instalados!${NC}"
+    echo ""
+}
+
+install_multimidia() {
+    local multi=$(cat "$STATE_DIR/multimidia")
+    
+    if [[ "$multi" == "none" ]]; then
+        return
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Instalando aplicativos Multimídia${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    for app in $multi; do
+        case "$app" in
             gimp)
                 flatpak install --user -y flathub org.gimp.GIMP
                 ;;
@@ -510,22 +570,22 @@ install_office() {
             obs)
                 flatpak install --user -y flathub com.obsproject.Studio
                 ;;
-            obsidian)
-                flatpak install --user -y flathub md.obsidian.Obsidian
-                ;;
-            chatterino)
-                flatpak install --user -y flathub com.chatterino.chatterino
-                ;;
             upscayl)
                 flatpak install --user -y flathub org.upscayl.Upscayl
                 ;;
             handbrake)
                 flatpak install --user -y flathub fr.handbrake.ghb
                 ;;
+            audacity)
+                flatpak install --user -y flathub org.audacityteam.Audacity
+                ;;
+            chatterino)
+                flatpak install --user -y flathub com.chatterino.chatterino
+                ;;
         esac
     done
     
-    echo "${GREEN}✓ Aplicativos office instalados!${NC}"
+    echo "${GREEN}✓ Aplicativos multimídia instalados!${NC}"
     echo ""
 }
 
@@ -816,7 +876,8 @@ main() {
     detect_cpu
     select_desktop
     select_browser
-    select_office
+    select_produtividade
+    select_multimidia
     select_games
     select_repos
     setup_sources
@@ -827,7 +888,8 @@ main() {
     install_desktop
     setup_package_managers
     install_browser
-    install_office
+    install_produtividade
+    install_multimidia
     install_games
     install_repos
     setup_network
