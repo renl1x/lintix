@@ -260,8 +260,9 @@ select_desktop() {
         show_option "1" "GNOME"
         show_option "2" "KDE Plasma"
         show_option "3" "Nenhum"
+        show_option "4" "Dank Linux"
         echo ""
-        read -p "Opção [1-3] (Enter para GNOME): " de_opt
+        read -p "Opção [1-4] (Enter para GNOME): " de_opt
         
         case "$de_opt" in
             1|"") echo "gnome" > "$STATE_DIR/desktop"
@@ -270,6 +271,8 @@ select_desktop() {
                echo "${GREEN}Desktop: KDE Plasma${NC}" ;;
             3) echo "none" > "$STATE_DIR/desktop"
                echo "${GREEN}Desktop: Nenhum${NC}" ;;
+            4) echo "dank" > "$STATE_DIR/desktop"
+               echo "${GREEN}Desktop: Dank Linux${NC}" ;;
             *) echo "${RED}Opção inválida.${NC}"
                sleep 1
                select_desktop
@@ -313,7 +316,7 @@ select_produtividade() {
     show_option "2" "Obsidian"
     show_option "3" "Zen Browser"
     show_option "4" "Helium Browser"
-    show_option "5" "Upscayl"
+    show_option "5" "Discord"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a prod_opts
@@ -328,7 +331,7 @@ select_produtividade() {
                 2) prod_list="${prod_list} obsidian" ;;
                 3) prod_list="${prod_list} zen" ;;
                 4) prod_list="${prod_list} helium" ;;
-                5) prod_list="${prod_list} upscayl" ;;
+                5) prod_list="${prod_list} discord" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
             esac
         done
@@ -551,6 +554,9 @@ install_desktop() {
                     sudo apt install -y sddm plasma-desktop plasma-workspace-wallpapers konsole dolphin discover kdeconnect partitionmanager ark
                     sudo systemctl enable sddm
                     ;;
+                dank)
+                    curl -fsSL https://install.danklinux.com | sh
+                    ;;
                 none)
                     echo "${YELLOW}Nenhum desktop instalado.${NC}"
                     ;;
@@ -610,8 +616,8 @@ install_produtividade() {
                     sudo pacman -S --noconfirm helium-browser-bin
                 fi
                 ;;
-            upscayl)
-                flatpak install --user -y flathub org.upscayl.Upscayl
+            discord)
+                flatpak install --user -y flathub com.discordapp.Discord
                 ;;
         esac
     done
@@ -915,8 +921,7 @@ main() {
     setup_network
     setup_zram
     setup_btrfs_compression
-    setup_performance_vars
-    remove_packages
+    setup_performance_vars    remove_packages
     setup_boot_timeout
     setup_secureboot
     ask_reboot
