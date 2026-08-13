@@ -460,10 +460,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman distrobox git neovim gamemode fastfetch
+            sudo apt install -y podman git neovim gamemode fastfetch
             ;;
         arch)
-            sudo pacman -S --noconfirm podman distrobox git neovim fastfetch gamemode
+            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode
             ;;
     esac
 }
@@ -715,7 +715,14 @@ install_extras() {
     for app in $extras; do
         case "$app" in
             distroshelf)
+                echo "${YELLOW}Instalando DistroShelf e Distrobox...${NC}"
                 flatpak install --user -y flathub com.ranfdev.DistroShelf
+                if [[ "$distro" == "debian" ]]; then
+                    sudo apt install -y distrobox
+                elif [[ "$distro" == "arch" ]]; then
+                    sudo pacman -S --noconfirm distrobox
+                fi
+                echo "${GREEN}✓ DistroShelf e Distrobox instalados!${NC}"
                 ;;
             codium)
                 flatpak install --user -y flathub com.vscodium.codium
