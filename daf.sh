@@ -78,6 +78,154 @@ detect_cpu() {
     fi
 }
 
+detect_bootloader() {
+    local bootloader=""
+    
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+        bootloader="systemd-boot"
+    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+        bootloader="limine"
+    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ]; then
+        bootloader="grub"
+    fi
+    
+    echo "$bootloader" > "$STATE_DIR/bootloader"
+}
+
+detect_secureboot_support() {
+    if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
+        if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
+            echo "enabled" > "$STATE_DIR/secureboot_state"
+        else
+            echo "disabled" > "$STATE_DIR/secureboot_state"
+        fi
+        echo "supported" > "$STATE_DIR/secureboot_support"
+    else
+        echo "unsupported" > "$STATE_DIR/secureboot_support"
+    fi
+}
+
+setup_secureboot_arch() {
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+    
+    if [[ "$secureboot_state" == "enabled" ]]; then
+        echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
+        return 0
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Configurando Secure Boot${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    echo "${YELLOW}Instalando sbctl...${NC}"
+    sudo pacman -S --noconfirm sbctl
+    
+    echo "${YELLOW}Verificando status do sbctl...${NC}"
+    sudo sbctl status
+    
+    echo "${YELLOW}Criando chaves Secure Boot...${NC}"
+    sudo sbctl create-keys
+    
+    echo "${YELLOW}Registrando chaves...${NC}"
+    if sudo sbctl enroll-keys --microsoft 2>&1 | grep -q "firmware-builtin"; then
+        sudo sbctl enroll-keys --microsoft
+    else
+        sudo sbctl enroll-keys --microsoft --firmware-builtin
+    fi
+    
+    echo "${YELLOW}Verificando arquivos para assinar...${NC}"
+    sudo sbctl verify
+    
+    echo "${YELLOW}Assinando arquivos do boot...${NC}"
+    sudo sbctl-batch-sign || sudo sbctl sign -s /boot/vmlinuz-linux || true
+    
+    case "$bootloader" in
+        "systemd-boot")
+            echo "${YELLOW}Configurando systemd-boot para Secure Boot...${NC}"
+            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+            fi
+            ;;
+        "limine")
+            echo "${YELLOW}Configurando Limine para Secure Boot...${NC}"
+            if command -v limine-enroll-config &>/dev/null; then
+                echo "${YELLOW}Habilitando enrollment do config checksum...${NC}"
+                if [ -f /etc/default/limine ]; then
+                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+                else
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+                fi
+                
+                if [ -f /boot/limine.conf ]; then
+                    local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
+                    if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
+                        echo "${YELLOW}Gerando hash para splash image...${NC}"
+                        local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
+                        sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
+                    fi
+                fi
+                
+                sudo limine-enroll-config
+                sudo limine-update
+            fi
+            ;;
+        "grub")
+            echo "${YELLOW}Configurando GRUB para Secure Boot...${NC}"
+            if command -v grub-install &>/dev/null; then
+                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+            fi
+            ;;
+        *)
+            echo "${YELLOW}Bootloader não detectado. Tentando assinar kernel padrão...${NC}"
+            sudo sbctl sign -s /boot/vmlinuz-linux || true
+            ;;
+    esac
+    
+    echo "${YELLOW}Verificando assinaturas...${NC}"
+    sudo sbctl verify
+    
+    echo "${GREEN}✓ Secure Boot configurado!${NC}"
+    echo "${YELLOW}Reinicie o sistema e ative o Secure Boot na BIOS/UEFI${NC}"
+}
+
+setup_secureboot() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" != "arch" ]]; then
+        echo "${YELLOW}Secure Boot é suportado apenas no Arch Linux. Pulando...${NC}"
+        return
+    fi
+    
+    local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
+    
+    if [[ "$secureboot_support" == "unsupported" ]]; then
+        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI). Pulando...${NC}"
+        return
+    fi
+    
+    echo ""
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${YELLOW}⚠ ATENÇÃO: O sistema deve estar em Setup Mode para configurar o Secure Boot${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    
+    if confirm "O sistema está em Setup Mode? (Você já reiniciou e entrou na BIOS para ativar o Setup Mode)"; then
+        setup_secureboot_arch
+    else
+        echo "${YELLOW}Por favor, reinicie o sistema, entre na BIOS/UEFI e ative o Setup Mode.${NC}"
+        echo "${YELLOW}Após ativar, execute novamente o script.${NC}"
+        echo ""
+        if confirm "Deseja reiniciar agora para ativar o Setup Mode?"; then
+            echo "${GREEN}Reiniciando o sistema...${NC}"
+            sudo systemctl reboot --firmware-setup
+        else
+            echo "${YELLOW}Secure Boot não foi configurado. Execute o script novamente após ativar o Setup Mode.${NC}"
+        fi
+    fi
+}
+
 select_desktop() {
     clear_screen
     show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
@@ -950,6 +1098,8 @@ main() {
     detect_distro
     detect_gpu
     detect_cpu
+    detect_bootloader
+    detect_secureboot_support
     select_desktop
     select_produtividade
     select_multimidia
@@ -973,6 +1123,7 @@ main() {
     setup_btrfs_compression
     setup_performance_vars
     remove_packages
+    setup_secureboot
     ask_reboot
 }
 
