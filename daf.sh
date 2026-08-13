@@ -95,19 +95,13 @@ detect_bootloader() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Configurando tempo de boot para 2 segundos${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
     case "$bootloader" in
         "systemd-boot")
-            echo "${YELLOW}Configurando systemd-boot timeout para 2 segundos...${NC}"
             if [ -d /boot/EFI/systemd ]; then
                 local loader_conf="/boot/EFI/systemd/loader.conf"
             elif [ -d /boot/loader ]; then
                 local loader_conf="/boot/loader/loader.conf"
             else
-                echo "${RED}⚠ Diretório do systemd-boot não encontrado.${NC}"
                 return 1
             fi
             
@@ -117,30 +111,22 @@ setup_boot_timeout() {
                 else
                     echo "timeout 2" | sudo tee -a "$loader_conf"
                 fi
-                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
             else
                 echo "timeout 2" | sudo tee "$loader_conf"
-                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
             fi
             ;;
             
         "limine")
-            echo "${YELLOW}Configurando Limine timeout para 2 segundos...${NC}"
             if [ -f /boot/limine.conf ]; then
                 if grep -q "^TIMEOUT" /boot/limine.conf; then
                     sudo sed -i 's/^TIMEOUT=.*/TIMEOUT=2/' /boot/limine.conf
                 else
                     echo "TIMEOUT=2" | sudo tee -a /boot/limine.conf
                 fi
-                echo "${GREEN}✓ Limine configurado para 2 segundos${NC}"
-            else
-                echo "${RED}⚠ Arquivo /boot/limine.conf não encontrado.${NC}"
-                return 1
             fi
             ;;
             
         "grub")
-            echo "${YELLOW}Configurando GRUB timeout para 2 segundos...${NC}"
             if [ -f /etc/default/grub ]; then
                 if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
                     sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
@@ -153,20 +139,9 @@ setup_boot_timeout() {
                     echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
                 fi
                 sudo update-grub
-                echo "${GREEN}✓ GRUB configurado para 2 segundos${NC}"
-            else
-                echo "${RED}⚠ Arquivo /etc/default/grub não encontrado.${NC}"
-                return 1
             fi
             ;;
-            
-        *)
-            echo "${YELLOW}⚠ Nenhum bootloader detectado ou não suportado. Pulando...${NC}"
-            return 1
-            ;;
     esac
-    
-    echo ""
 }
 
 detect_secureboot_support() {
@@ -187,47 +162,29 @@ setup_secureboot_arch() {
     local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
     
     if [[ "$secureboot_state" == "enabled" ]]; then
-        echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
         return 0
     fi
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Configurando Secure Boot${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
-    echo "${YELLOW}Instalando sbctl...${NC}"
     sudo pacman -S --noconfirm sbctl
-    
-    echo "${YELLOW}Verificando status do sbctl...${NC}"
-    sudo sbctl status
-    
-    echo "${YELLOW}Criando chaves Secure Boot...${NC}"
     sudo sbctl create-keys
     
-    echo "${YELLOW}Registrando chaves...${NC}"
     if sudo sbctl enroll-keys --microsoft 2>&1 | grep -q "firmware-builtin"; then
         sudo sbctl enroll-keys --microsoft
     else
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    echo "${YELLOW}Verificando arquivos para assinar...${NC}"
     sudo sbctl verify
-    
-    echo "${YELLOW}Assinando arquivos do boot...${NC}"
     sudo sbctl-batch-sign || sudo sbctl sign -s /boot/vmlinuz-linux || true
     
     case "$bootloader" in
         "systemd-boot")
-            echo "${YELLOW}Configurando systemd-boot para Secure Boot...${NC}"
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
                 sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
             fi
             ;;
         "limine")
-            echo "${YELLOW}Configurando Limine para Secure Boot...${NC}"
             if command -v limine-enroll-config &>/dev/null; then
-                echo "${YELLOW}Habilitando enrollment do config checksum...${NC}"
                 if [ -f /etc/default/limine ]; then
                     sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
                     echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
@@ -238,7 +195,6 @@ setup_secureboot_arch() {
                 if [ -f /boot/limine.conf ]; then
                     local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
                     if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
-                        echo "${YELLOW}Gerando hash para splash image...${NC}"
                         local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
                         sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
                     fi
@@ -249,36 +205,28 @@ setup_secureboot_arch() {
             fi
             ;;
         "grub")
-            echo "${YELLOW}Configurando GRUB para Secure Boot...${NC}"
             if command -v grub-install &>/dev/null; then
                 sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
             fi
             ;;
         *)
-            echo "${YELLOW}Bootloader não detectado. Tentando assinar kernel padrão...${NC}"
             sudo sbctl sign -s /boot/vmlinuz-linux || true
             ;;
     esac
     
-    echo "${YELLOW}Verificando assinaturas...${NC}"
     sudo sbctl verify
-    
-    echo "${GREEN}✓ Secure Boot configurado!${NC}"
-    echo "${YELLOW}Reinicie o sistema e ative o Secure Boot na BIOS/UEFI${NC}"
 }
 
 setup_secureboot() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" != "arch" ]]; then
-        echo "${YELLOW}Secure Boot é suportado apenas no Arch Linux. Pulando...${NC}"
         return
     fi
     
     local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
     
     if [[ "$secureboot_support" == "unsupported" ]]; then
-        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI). Pulando...${NC}"
         return
     fi
     
@@ -295,7 +243,6 @@ setup_secureboot() {
         echo "${YELLOW}Após ativar, execute novamente o script.${NC}"
         echo ""
         if confirm "Deseja reiniciar agora para ativar o Setup Mode?"; then
-            echo "${GREEN}Reiniciando o sistema...${NC}"
             sudo systemctl reboot --firmware-setup
         else
             echo "${YELLOW}Secure Boot não foi configurado. Execute o script novamente após ativar o Setup Mode.${NC}"
@@ -305,7 +252,7 @@ setup_secureboot() {
 
 select_desktop() {
     clear_screen
-    show_section "AMBIENTE DESKTOP / DESKTOP ENVIRONMENT"
+    show_section "AMBIENTE DESKTOP"
     
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -360,20 +307,19 @@ select_desktop() {
 select_produtividade() {
     clear_screen
     show_section "PRODUTIVIDADE"
-    echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
+    echo "  Selecione os aplicativos (escolha múltiplos):"
     echo ""
-    show_option "1" "OnlyOffice (Suite de escritório)"
-    show_option "2" "Obsidian (Notas/Knowledge base)"
-    show_option "3" "Zen Browser (Navegador leve e minimalista)"
-    show_option "4" "Helium Browser (Navegador focado em performance)"
-    show_option "5" "Upscayl (Upscaling de imagens com IA)"
+    show_option "1" "OnlyOffice"
+    show_option "2" "Obsidian"
+    show_option "3" "Zen Browser"
+    show_option "4" "Helium Browser"
+    show_option "5" "Upscayl"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a prod_opts
     
     if [[ ${#prod_opts[@]} -eq 0 ]]; then
         echo "none" > "$STATE_DIR/produtividade"
-        echo "${GREEN}Nenhum aplicativo de produtividade selecionado.${NC}"
     else
         local prod_list=""
         for opt in "${prod_opts[@]}"; do
@@ -387,7 +333,6 @@ select_produtividade() {
             esac
         done
         echo "$prod_list" > "$STATE_DIR/produtividade"
-        echo "${GREEN}Aplicativo(s) de produtividade selecionado(s)!${NC}"
     fi
     sleep 1
 }
@@ -395,20 +340,19 @@ select_produtividade() {
 select_multimidia() {
     clear_screen
     show_section "MULTIMÍDIA"
-    echo "  Selecione os aplicativos que deseja instalar (escolha múltiplos):"
+    echo "  Selecione os aplicativos (escolha múltiplos):"
     echo ""
-    show_option "1" "GIMP (Editor de imagens profissional)"
-    show_option "2" "Kdenlive (Editor de vídeo não-linear)"
-    show_option "3" "OBS Studio (Gravação e streaming de tela)"
-    show_option "4" "HandBrake (Conversor de vídeos e áudios)"
-    show_option "5" "Audacity (Editor e gravador de áudio)"
+    show_option "1" "GIMP"
+    show_option "2" "Kdenlive"
+    show_option "3" "OBS Studio"
+    show_option "4" "HandBrake"
+    show_option "5" "Audacity"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a multi_opts
     
     if [[ ${#multi_opts[@]} -eq 0 ]]; then
         echo "none" > "$STATE_DIR/multimidia"
-        echo "${GREEN}Nenhum aplicativo multimídia selecionado.${NC}"
     else
         local multi_list=""
         for opt in "${multi_opts[@]}"; do
@@ -422,7 +366,6 @@ select_multimidia() {
             esac
         done
         echo "$multi_list" > "$STATE_DIR/multimidia"
-        echo "${GREEN}Aplicativo(s) multimídia selecionado(s)!${NC}"
     fi
     sleep 1
 }
@@ -430,20 +373,19 @@ select_multimidia() {
 select_games() {
     clear_screen
     show_section "JOGOS"
-    echo "  Selecione os jogos/plataformas que deseja instalar (escolha múltiplos):"
+    echo "  Selecione os jogos/plataformas (escolha múltiplos):"
     echo ""
-    show_option "1" "Steam (Loja e plataforma de jogos)"
-    show_option "2" "Proton Plus (Gerenciador de compatibilidade Proton)"
-    show_option "3" "Prism Launcher (Launcher alternativo para Minecraft)"
-    show_option "4" "Sober (Cliente para Roblox no Linux)"
-    show_option "5" "Heroic Games Launcher (Launcher para Epic/GOG)"
+    show_option "1" "Steam"
+    show_option "2" "Proton Plus"
+    show_option "3" "Prism Launcher"
+    show_option "4" "Sober"
+    show_option "5" "Heroic Games Launcher"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3 5) ou Enter para nenhum:"
     read -p "Opções: " -a games_opts
     
     if [[ ${#games_opts[@]} -eq 0 ]]; then
         echo "none" > "$STATE_DIR/games"
-        echo "${GREEN}Nenhum jogo selecionado.${NC}"
     else
         local games_list=""
         for opt in "${games_opts[@]}"; do
@@ -457,7 +399,6 @@ select_games() {
             esac
         done
         echo "$games_list" > "$STATE_DIR/games"
-        echo "${GREEN}Jogo(s) selecionado(s)!${NC}"
     fi
     sleep 1
 }
@@ -465,20 +406,19 @@ select_games() {
 select_extras() {
     clear_screen
     show_section "EXTRAS"
-    echo "  Selecione os aplicativos extras que deseja instalar (escolha múltiplos):"
+    echo "  Selecione os aplicativos (escolha múltiplos):"
     echo ""
-    show_option "1" "DistroShelf (Gerenciador de ISOs de distribuições)"
-    show_option "2" "VSCodium (Editor de código open-source sem telemetria)"
-    show_option "3" "Gamescope (Micro-compositor para jogos)"
-    show_option "4" "Alpaca (Cliente para LLMs e IA)"
-    show_option "5" "Gear Lever (Gerenciador de jogos da Heroic/Epic)"
+    show_option "1" "DistroShelf"
+    show_option "2" "VSCodium"
+    show_option "3" "Gamescope"
+    show_option "4" "Alpaca"
+    show_option "5" "Gear Lever"
     echo ""
     echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
     read -p "Opções: " -a extras_opts
     
     if [[ ${#extras_opts[@]} -eq 0 ]]; then
         echo "none" > "$STATE_DIR/extras"
-        echo "${GREEN}Nenhum aplicativo extra selecionado.${NC}"
     else
         local extras_list=""
         for opt in "${extras_opts[@]}"; do
@@ -492,7 +432,6 @@ select_extras() {
             esac
         done
         echo "$extras_list" > "$STATE_DIR/extras"
-        echo "${GREEN}Aplicativo(s) extra(s) selecionado(s)!${NC}"
     fi
     sleep 1
 }
@@ -548,52 +487,30 @@ install_base() {
 setup_security() {
     local distro=$(cat "$STATE_DIR/distro")
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Configurando Firewall e Segurança${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
     case "$distro" in
         debian)
-            echo "${YELLOW}Instalando e configurando UFW...${NC}"
             sudo apt install -y ufw
             sudo systemctl enable ufw
             sudo systemctl start ufw
-            echo "${GREEN}✓ UFW instalado e habilitado${NC}"
-            
-            echo "${YELLOW}Verificando AppArmor...${NC}"
             sudo systemctl enable apparmor
             sudo systemctl start apparmor
-            echo "${GREEN}✓ AppArmor habilitado${NC}"
-            
-            echo "${YELLOW}Instalando fwupd...${NC}"
             sudo apt install -y fwupd
             sudo systemctl enable fwupd
             sudo systemctl start fwupd
-            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
             ;;
             
         arch)
-            echo "${YELLOW}Instalando e configurando UFW...${NC}"
             sudo pacman -S --noconfirm ufw
             sudo systemctl enable ufw
             sudo systemctl start ufw
-            echo "${GREEN}✓ UFW instalado e habilitado${NC}"
-            
-            echo "${YELLOW}Instalando e configurando AppArmor...${NC}"
             sudo pacman -S --noconfirm apparmor
             sudo systemctl enable apparmor
             sudo systemctl start apparmor
-            echo "${GREEN}✓ AppArmor instalado e habilitado${NC}"
-            
-            echo "${YELLOW}Instalando fwupd...${NC}"
             sudo pacman -S --noconfirm fwupd
             sudo systemctl enable fwupd
             sudo systemctl start fwupd
-            echo "${GREEN}✓ fwupd instalado e habilitado${NC}"
             ;;
     esac
-    
-    echo ""
 }
 
 setup_package_managers() {
@@ -672,10 +589,6 @@ install_produtividade() {
         return
     fi
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando aplicativos de Produtividade${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
     for app in $prod; do
         case "$app" in
             onlyoffice)
@@ -702,9 +615,6 @@ install_produtividade() {
                 ;;
         esac
     done
-    
-    echo "${GREEN}✓ Aplicativos de produtividade instalados!${NC}"
-    echo ""
 }
 
 install_multimidia() {
@@ -713,10 +623,6 @@ install_multimidia() {
     if [[ "$multi" == "none" ]]; then
         return
     fi
-    
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando aplicativos Multimídia${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
     for app in $multi; do
         case "$app" in
@@ -737,9 +643,6 @@ install_multimidia() {
                 ;;
         esac
     done
-    
-    echo "${GREEN}✓ Aplicativos multimídia instalados!${NC}"
-    echo ""
 }
 
 install_games() {
@@ -748,10 +651,6 @@ install_games() {
     if [[ "$games" == "none" ]]; then
         return
     fi
-    
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando jogos e plataformas${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
     for app in $games; do
         case "$app" in
@@ -772,9 +671,6 @@ install_games() {
                 ;;
         esac
     done
-    
-    echo "${GREEN}✓ Jogos e plataformas instalados!${NC}"
-    echo ""
 }
 
 install_extras() {
@@ -785,36 +681,24 @@ install_extras() {
         return
     fi
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando aplicativos Extras${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
     for app in $extras; do
         case "$app" in
             distroshelf)
-                echo "${YELLOW}Instalando DistroShelf e Distrobox...${NC}"
                 flatpak install --user -y flathub com.ranfdev.DistroShelf
                 if [[ "$distro" == "debian" ]]; then
                     sudo apt install -y distrobox
                 elif [[ "$distro" == "arch" ]]; then
                     sudo pacman -S --noconfirm distrobox
                 fi
-                echo "${GREEN}✓ DistroShelf e Distrobox instalados!${NC}"
                 ;;
             codium)
                 flatpak install --user -y flathub com.vscodium.codium
                 ;;
             gamescope)
                 if [[ "$distro" == "arch" ]]; then
-                    echo "${YELLOW}Instalando Gamescope...${NC}"
                     sudo pacman -S --noconfirm gamescope
-                    echo "${GREEN}✓ Gamescope instalado!${NC}"
                 elif [[ "$distro" == "debian" ]]; then
-                    echo "${YELLOW}Instalando Gamescope...${NC}"
                     sudo apt install -y gamescope
-                    echo "${GREEN}✓ Gamescope instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Gamescope não está disponível para esta distribuição. Pulando...${NC}"
                 fi
                 ;;
             alpaca)
@@ -825,9 +709,6 @@ install_extras() {
                 ;;
         esac
     done
-    
-    echo "${GREEN}✓ Aplicativos extras instalados!${NC}"
-    echo ""
 }
 
 setup_network() {
@@ -837,8 +718,6 @@ setup_network() {
         sudo sed -i '/^allow-hotplug /s/^/#/' /etc/network/interfaces
         sudo sed -i '/^iface .* inet /s/^/#/' /etc/network/interfaces
         sudo sed -i '/^iface .* inet6 /s/^/#/' /etc/network/interfaces
-    else
-        echo "${YELLOW}setup_network: Esta função é exclusiva para Debian. Pulando...${NC}"
     fi
 }
 
@@ -855,8 +734,15 @@ swap-priority = 100
 EOF
         sudo systemctl daemon-reload
         sudo systemctl start systemd-zram-setup@zram0.service
-    else
-        echo "${YELLOW}setup_zram: Esta função é exclusiva para Debian. Pulando...${NC}"
+    elif [[ "$distro" == "arch" ]]; then
+        sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
+[zram0]
+zram-size = ram * 0.25
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+        sudo systemctl daemon-reload
+        sudo systemctl start systemd-zram-setup@zram0.service
     fi
 }
 
@@ -869,56 +755,40 @@ setup_btrfs_compression() {
             sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
             sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
             sudo mount -o remount /
-            echo "${GREEN}Compressão BTRFS configurada para zstd${NC}"
-        else
-            echo "${YELLOW}Sistema sem BTRFS. Pulando compressão.${NC}"
         fi
-    else
-        echo "${YELLOW}setup_btrfs_compression: Esta função é exclusiva para Debian. Pulando...${NC}"
     fi
 }
 
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
-        echo "${YELLOW}mokutil não instalado. Pulando importação da chave MOK.${NC}"
         return
     fi
     
     if ! sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
-        echo "${YELLOW}Secure Boot não está ativo. Pulando importação da chave MOK.${NC}"
         return
     fi
     
     if [ ! -f /var/lib/dkms/mok.pub ]; then
-        echo "${YELLOW}Arquivo /var/lib/dkms/mok.pub não encontrado. Pulando importação da chave MOK.${NC}"
         return
     fi
     
     if sudo mokutil --list-enrolled 2>/dev/null | grep -q "Debian Secure Boot"; then
-        echo "${GREEN}Chave MOK já está enrollada no sistema. Pulando importação.${NC}"
         return
     fi
     
-    echo "${YELLOW}Importando chave MOK para Secure Boot...${NC}"
-    echo "${YELLOW}Digite uma senha (8-16 caracteres) quando solicitado.${NC}"
+    echo "${YELLOW}Digite uma senha (8-16 caracteres) para o Secure Boot:${NC}"
     sudo mokutil --import /var/lib/dkms/mok.pub
-    echo "${GREEN}Chave MOK importada com sucesso!${NC}"
-    echo "${YELLOW}Reinicie o sistema para concluir o enrollment da chave MOK.${NC}"
+    echo "${YELLOW}Reinicie o sistema para concluir o enrollment.${NC}"
 }
 
 install_nvidia_debian() {
-    echo "${YELLOW}Instalando drivers NVIDIA no Debian...${NC}"
-    
     if [ -f /etc/os-release ]; then
         source /etc/os-release
         local debian_version="${VERSION_ID:-}"
         
         if [ -z "$debian_version" ]; then
-            echo "${RED}Erro: Não foi possível detectar a versão do Debian a partir do /etc/os-release${NC}"
             return 1
         fi
-        
-        echo "${YELLOW}Detectado Debian ${debian_version}${NC}"
         
         wget https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
@@ -926,11 +796,8 @@ install_nvidia_debian() {
         sudo apt -y install nvidia-open
         rm -f cuda-keyring_1.1-1_all.deb
         
-        echo "${GREEN}✓ Drivers NVIDIA instalados com sucesso!${NC}"
-        
         import_mok_key
     else
-        echo "${RED}Erro: Arquivo /etc/os-release não encontrado${NC}"
         return 1
     fi
 }
@@ -1014,13 +881,12 @@ remove_packages() {
 
 ask_reboot() {
     echo ""
-    echo "${GREEN}Instalação concluída com sucesso!${NC}"
-    echo "${YELLOW}Recomenda-se reiniciar o sistema para aplicar todas as configurações.${NC}"
+    echo "${GREEN}Instalação concluída!${NC}"
+    echo "${YELLOW}Recomenda-se reiniciar o sistema.${NC}"
     if confirm "Deseja reiniciar agora?"; then
-        echo "${GREEN}Reiniciando o sistema...${NC}"
         sudo reboot
     else
-        echo "${YELLOW}Lembre-se de reiniciar o sistema posteriormente para aplicar todas as configurações.${NC}"
+        echo "${YELLOW}Lembre-se de reiniciar posteriormente.${NC}"
     fi
 }
 
