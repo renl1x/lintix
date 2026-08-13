@@ -92,6 +92,83 @@ detect_bootloader() {
     echo "$bootloader" > "$STATE_DIR/bootloader"
 }
 
+setup_boot_timeout() {
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Configurando tempo de boot para 2 segundos${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    case "$bootloader" in
+        "systemd-boot")
+            echo "${YELLOW}Configurando systemd-boot timeout para 2 segundos...${NC}"
+            if [ -d /boot/EFI/systemd ]; then
+                local loader_conf="/boot/EFI/systemd/loader.conf"
+            elif [ -d /boot/loader ]; then
+                local loader_conf="/boot/loader/loader.conf"
+            else
+                echo "${RED}⚠ Diretório do systemd-boot não encontrado.${NC}"
+                return 1
+            fi
+            
+            if [ -f "$loader_conf" ]; then
+                if grep -q "^timeout" "$loader_conf"; then
+                    sudo sed -i 's/^timeout.*/timeout 2/' "$loader_conf"
+                else
+                    echo "timeout 2" | sudo tee -a "$loader_conf"
+                fi
+                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
+            else
+                echo "timeout 2" | sudo tee "$loader_conf"
+                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
+            fi
+            ;;
+            
+        "limine")
+            echo "${YELLOW}Configurando Limine timeout para 2 segundos...${NC}"
+            if [ -f /boot/limine.conf ]; then
+                if grep -q "^TIMEOUT" /boot/limine.conf; then
+                    sudo sed -i 's/^TIMEOUT=.*/TIMEOUT=2/' /boot/limine.conf
+                else
+                    echo "TIMEOUT=2" | sudo tee -a /boot/limine.conf
+                fi
+                echo "${GREEN}✓ Limine configurado para 2 segundos${NC}"
+            else
+                echo "${RED}⚠ Arquivo /boot/limine.conf não encontrado.${NC}"
+                return 1
+            fi
+            ;;
+            
+        "grub")
+            echo "${YELLOW}Configurando GRUB timeout para 2 segundos...${NC}"
+            if [ -f /etc/default/grub ]; then
+                if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
+                fi
+                if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
+                fi
+                sudo update-grub
+                echo "${GREEN}✓ GRUB configurado para 2 segundos${NC}"
+            else
+                echo "${RED}⚠ Arquivo /etc/default/grub não encontrado.${NC}"
+                return 1
+            fi
+            ;;
+            
+        *)
+            echo "${YELLOW}⚠ Nenhum bootloader detectado ou não suportado. Pulando...${NC}"
+            return 1
+            ;;
+    esac
+    
+    echo ""
+}
+
 detect_secureboot_support() {
     if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
         if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
@@ -974,6 +1051,7 @@ main() {
     setup_btrfs_compression
     setup_performance_vars
     remove_packages
+    setup_boot_timeout
     setup_secureboot
     ask_reboot
 }
