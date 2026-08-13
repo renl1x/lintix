@@ -392,7 +392,7 @@ select_extras() {
     echo ""
     show_option "1" "DistroShelf (Gerenciador de ISOs de distribuições)"
     show_option "2" "VSCodium (Editor de código open-source sem telemetria)"
-    show_option "3" "Bitwarden (Gerenciador de senhas open-source)"
+    show_option "3" "Gamescope (Micro-compositor para jogos)"
     show_option "4" "Alpaca (Cliente para LLMs e IA)"
     show_option "5" "Gear Lever (Gerenciador de jogos da Heroic/Epic)"
     echo ""
@@ -408,7 +408,7 @@ select_extras() {
             case "$opt" in
                 1) extras_list="${extras_list} distroshelf" ;;
                 2) extras_list="${extras_list} codium" ;;
-                3) extras_list="${extras_list} bitwarden" ;;
+                3) extras_list="${extras_list} gamescope" ;;
                 4) extras_list="${extras_list} alpaca" ;;
                 5) extras_list="${extras_list} gearlever" ;;
                 *) echo "${RED}Opção inválida: $opt${NC}" ;;
@@ -416,87 +416,6 @@ select_extras() {
         done
         echo "$extras_list" > "$STATE_DIR/extras"
         echo "${GREEN}Aplicativo(s) extra(s) selecionado(s)!${NC}"
-    fi
-    sleep 1
-}
-
-select_ferramentas() {
-    clear_screen
-    show_section "FERRAMENTAS"
-    echo "  Selecione as ferramentas que deseja instalar (escolha múltiplos):"
-    echo ""
-    
-    local distro=$(cat "$STATE_DIR/distro")
-    local opt_num=1
-    
-    if [[ "$distro" == "arch" ]]; then
-        show_option "$opt_num" "Yay (AUR helper - Arch)"
-        ((opt_num++))
-    fi
-    
-    if [[ "$distro" == "debian" ]]; then
-        show_option "$opt_num" "Snap (Gerenciador de pacotes universal - Debian)"
-        ((opt_num++))
-        show_option "$opt_num" "Pacstall (Gerenciador de pacotes estilo AUR - Debian)"
-        ((opt_num++))
-    fi
-    
-    if [[ "$distro" == "arch" ]]; then
-        show_option "$opt_num" "Gamescope (Micro-compositor para jogos - Arch)"
-        ((opt_num++))
-        show_option "$opt_num" "Waydroid (Android em Wayland - Arch)"
-        ((opt_num++))
-    fi
-    
-    show_option "$opt_num" "Nix (Gerenciador de pacotes funcional)"
-    
-    echo ""
-    echo "  Digite os números separados por espaço (ex: 1 3) ou Enter para nenhum:"
-    read -p "Opções: " -a ferramentas_opts
-    
-    if [[ ${#ferramentas_opts[@]} -eq 0 ]]; then
-        echo "none" > "$STATE_DIR/ferramentas"
-        echo "${GREEN}Nenhuma ferramenta selecionada.${NC}"
-    else
-        local ferramentas_list=""
-        for opt in "${ferramentas_opts[@]}"; do
-            case "$opt" in
-                1) 
-                    if [[ "$distro" == "arch" ]]; then
-                        ferramentas_list="${ferramentas_list} yay"
-                    fi
-                    ;;
-                2)
-                    if [[ "$distro" == "debian" ]]; then
-                        ferramentas_list="${ferramentas_list} snap"
-                    elif [[ "$distro" == "arch" ]]; then
-                        ferramentas_list="${ferramentas_list} gamescope"
-                    fi
-                    ;;
-                3)
-                    if [[ "$distro" == "debian" ]]; then
-                        ferramentas_list="${ferramentas_list} pacstall"
-                    elif [[ "$distro" == "arch" ]]; then
-                        ferramentas_list="${ferramentas_list} waydroid"
-                    fi
-                    ;;
-                4)
-                    if [[ "$distro" == "arch" ]]; then
-                        ferramentas_list="${ferramentas_list} nix"
-                    else
-                        ferramentas_list="${ferramentas_list} nix"
-                    fi
-                    ;;
-                5)
-                    if [[ "$distro" == "arch" ]]; then
-                        ferramentas_list="${ferramentas_list} nix"
-                    fi
-                    ;;
-                *) echo "${RED}Opção inválida: $opt${NC}" ;;
-            esac
-        done
-        echo "$ferramentas_list" > "$STATE_DIR/ferramentas"
-        echo "${GREEN}Ferramenta(s) selecionada(s)!${NC}"
     fi
     sleep 1
 }
@@ -541,10 +460,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman distrobox git neovim gamemode fastfetch lshw
+            sudo apt install -y podman distrobox git neovim gamemode fastfetch
             ;;
         arch)
-            sudo pacman -S --noconfirm podman distrobox git neovim fastfetch gamemode lshw
+            sudo pacman -S --noconfirm podman distrobox git neovim fastfetch gamemode
             ;;
     esac
 }
@@ -783,6 +702,7 @@ install_games() {
 
 install_extras() {
     local extras=$(cat "$STATE_DIR/extras")
+    local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$extras" == "none" ]]; then
         return
@@ -800,8 +720,18 @@ install_extras() {
             codium)
                 flatpak install --user -y flathub com.vscodium.codium
                 ;;
-            bitwarden)
-                flatpak install --user -y flathub com.bitwarden.desktop
+            gamescope)
+                if [[ "$distro" == "arch" ]]; then
+                    echo "${YELLOW}Instalando Gamescope...${NC}"
+                    sudo pacman -S --noconfirm gamescope
+                    echo "${GREEN}✓ Gamescope instalado!${NC}"
+                elif [[ "$distro" == "debian" ]]; then
+                    echo "${YELLOW}Instalando Gamescope...${NC}"
+                    sudo apt install -y gamescope
+                    echo "${GREEN}✓ Gamescope instalado!${NC}"
+                else
+                    echo "${YELLOW}⚠ Gamescope não está disponível para esta distribuição. Pulando...${NC}"
+                fi
                 ;;
             alpaca)
                 flatpak install --user -y flathub com.jeffser.Alpaca
@@ -813,90 +743,6 @@ install_extras() {
     done
     
     echo "${GREEN}✓ Aplicativos extras instalados!${NC}"
-    echo ""
-}
-
-install_ferramentas() {
-    local ferramentas=$(cat "$STATE_DIR/ferramentas")
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$ferramentas" == "none" ]]; then
-        return
-    fi
-    
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Instalando ferramentas${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
-    for tool in $ferramentas; do
-        case "$tool" in
-            yay)
-                if [[ "$distro" == "arch" ]]; then
-                    echo "${YELLOW}Instalando Yay (AUR helper)...${NC}"
-                    sudo pacman -S --noconfirm yay
-                    echo "${GREEN}✓ Yay instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Yay é exclusivo para Arch Linux. Pulando...${NC}"
-                fi
-                ;;
-            snap)
-                if [[ "$distro" == "debian" ]]; then
-                    echo "${YELLOW}Instalando Snap...${NC}"
-                    sudo apt install -y snapd
-                    sudo systemctl enable snapd
-                    sudo systemctl start snapd
-                    echo "${GREEN}✓ Snap instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Snap está disponível apenas para Debian. Pulando...${NC}"
-                fi
-                ;;
-            pacstall)
-                if [[ "$distro" == "debian" ]]; then
-                    echo "${YELLOW}Instalando Pacstall...${NC}"
-                    sudo bash -c "$(curl -fsSL https://pacstall.dev/q/install)"
-                    echo "${GREEN}✓ Pacstall instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Pacstall é exclusivo para Debian. Pulando...${NC}"
-                fi
-                ;;
-            gamescope)
-                if [[ "$distro" == "arch" ]]; then
-                    echo "${YELLOW}Instalando Gamescope...${NC}"
-                    sudo pacman -S --noconfirm gamescope
-                    echo "${GREEN}✓ Gamescope instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Gamescope está disponível apenas para Arch Linux. Pulando...${NC}"
-                fi
-                ;;
-            waydroid)
-                if [[ "$distro" == "arch" ]]; then
-                    echo "${YELLOW}Instalando Waydroid...${NC}"
-                    sudo pacman -S --noconfirm waydroid
-                    echo "${GREEN}✓ Waydroid instalado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Waydroid está disponível apenas para Arch Linux. Pulando...${NC}"
-                fi
-                ;;
-            nix)
-                if [[ "$distro" == "arch" ]]; then
-                    echo "${YELLOW}Instalando Nix...${NC}"
-                    sudo pacman -S --noconfirm nix
-                    sudo systemctl enable nix-daemon
-                    sudo systemctl start nix-daemon
-                    echo "${GREEN}✓ Nix instalado e habilitado!${NC}"
-                elif [[ "$distro" == "debian" ]]; then
-                    echo "${YELLOW}Instalando Nix...${NC}"
-                    sudo apt install -y nix-bin
-                    sudo systemctl enable nix-daemon
-                    sudo systemctl start nix-daemon
-                    echo "${GREEN}✓ Nix instalado e habilitado!${NC}"
-                else
-                    echo "${YELLOW}⚠ Distribuição não suportada para Nix. Pulando...${NC}"
-                fi
-                ;;
-        esac
-    done
-    
     echo ""
 }
 
@@ -1105,7 +951,6 @@ main() {
     select_multimidia
     select_games
     select_extras
-    select_ferramentas
     setup_sources
     install_base
     setup_security
@@ -1117,7 +962,6 @@ main() {
     install_multimidia
     install_games
     install_extras
-    install_ferramentas
     setup_network
     setup_zram
     setup_btrfs_compression
