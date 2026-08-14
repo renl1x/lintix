@@ -145,6 +145,14 @@ setup_boot_timeout() {
 }
 
 detect_secureboot_support() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [ "$distro" == "arch" ]; then
+        if ! command -v mokutil &>/dev/null; then
+            sudo pacman -S --noconfirm mokutil
+        fi
+    fi
+    
     if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
         if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
             echo "enabled" > "$STATE_DIR/secureboot_state"
