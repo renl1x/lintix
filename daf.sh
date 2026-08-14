@@ -226,19 +226,28 @@ setup_secureboot_arch() {
     
     sudo sbctl verify
     
+    sudo sbctl sign -s /boot/vmlinuz-linux || true
+    
+    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+    fi
+    
+    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
+    fi
+    
+    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
+    fi
+    
+    if [ -f /boot/EFI/BOOT/BOOTX64.efi ]; then
+        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.efi
+    fi
+    
     case "$bootloader" in
         "systemd-boot")
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
                 sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
-            fi
-            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
-            fi
-            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
-            fi
-            if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-                sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
             fi
             ;;
         "limine")
@@ -274,8 +283,6 @@ setup_secureboot_arch() {
             fi
             ;;
     esac
-    
-    sudo sbctl sign -s /boot/vmlinuz-linux || true
     
     sudo sbctl verify
 }
