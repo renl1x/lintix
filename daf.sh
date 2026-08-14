@@ -470,10 +470,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman git neovim gamemode fastfetch curl
+            sudo apt install -y podman git neovim gamemode fastfetch
             ;;
         arch)
-            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode curl
+            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode
             ;;
     esac
 }
@@ -866,7 +866,7 @@ remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt remove -y nano wget vim-common
+        sudo apt remove -y nano vim-common
         sudo apt autoremove -y
     fi
 }
