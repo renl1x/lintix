@@ -230,24 +230,7 @@ setup_secureboot() {
         return
     fi
     
-    echo ""
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${YELLOW}⚠ ATENÇÃO: O sistema deve estar em Setup Mode para configurar o Secure Boot${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-    
-    if confirm "O sistema está em Setup Mode? (Você já reiniciou e entrou na BIOS para ativar o Setup Mode)"; then
-        setup_secureboot_arch
-    else
-        echo "${YELLOW}Por favor, reinicie o sistema, entre na BIOS/UEFI e ative o Setup Mode.${NC}"
-        echo "${YELLOW}Após ativar, execute novamente o script.${NC}"
-        echo ""
-        if confirm "Deseja reiniciar agora para ativar o Setup Mode?"; then
-            sudo systemctl reboot --firmware-setup
-        else
-            echo "${YELLOW}Secure Boot não foi configurado. Execute o script novamente após ativar o Setup Mode.${NC}"
-        fi
-    fi
+    setup_secureboot_arch
 }
 
 select_desktop() {
