@@ -226,9 +226,11 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    sudo sbctl verify
+    sudo sbctl verify --no-color
     
-    sudo sbctl sign -s /boot/vmlinuz-linux || true
+    if [ -f /boot/vmlinuz-linux ]; then
+        sudo sbctl sign -s /boot/vmlinuz-linux || true
+    fi
     
     if [ -f /boot/vmlinuz-linux-lts ]; then
         sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
@@ -237,13 +239,13 @@ setup_secureboot_arch() {
     case "$bootloader" in
         "systemd-boot")
             if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
+                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
             fi
             if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
             fi
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
             fi
             ;;
         "limine")
@@ -266,13 +268,16 @@ setup_secureboot_arch() {
                 sudo limine-enroll-config
                 sudo limine-update
             fi
+            if [ -f /boot/limine.efi ]; then
+                sudo sbctl sign -s /boot/limine.efi || true
+            fi
             ;;
         "grub")
             if command -v grub-install &>/dev/null; then
                 sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
             fi
             if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi
+                sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi || true
             fi
             ;;
         *)
@@ -281,10 +286,10 @@ setup_secureboot_arch() {
     esac
     
     if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi
+        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
     fi
     
-    sudo sbctl verify
+    sudo sbctl verify --no-color
 }
 
 setup_secureboot() {
