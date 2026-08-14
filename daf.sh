@@ -495,17 +495,12 @@ setup_security() {
             sudo apt install -y ufw
             sudo systemctl enable ufw
             sudo systemctl start ufw
-            sudo systemctl enable apparmor
-            sudo systemctl start apparmor
             sudo apt install -y fwupd
             sudo systemctl enable fwupd
             sudo systemctl start fwupd
             ;;
             
         arch)
-            sudo pacman -S --noconfirm ufw
-            sudo systemctl enable ufw
-            sudo systemctl start ufw
             sudo pacman -S --noconfirm apparmor
             sudo systemctl enable apparmor
             sudo systemctl start apparmor
@@ -921,7 +916,8 @@ main() {
     setup_network
     setup_zram
     setup_btrfs_compression
-    setup_performance_vars    remove_packages
+    setup_performance_vars
+    remove_packages
     setup_boot_timeout
     setup_secureboot
     ask_reboot
