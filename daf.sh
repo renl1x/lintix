@@ -218,54 +218,29 @@ setup_secureboot_arch() {
     sudo pacman -S --noconfirm sbctl
     sudo sbctl create-keys
     
-    # ASUS e Gigabyte não devem usar --firmware-builtin
     if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
-        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft (sem --firmware-builtin)${NC}"
         sudo sbctl enroll-keys --microsoft
     else
-        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
     sudo sbctl verify
-    sudo sbctl-batch-sign || sudo sbctl sign -s /boot/vmlinuz-linux || true
     
-    case "$bootloader" in
-        "systemd-boot")
-            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
-            fi
-            ;;
-        "limine")
-            if command -v limine-enroll-config &>/dev/null; then
-                if [ -f /etc/default/limine ]; then
-                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
-                else
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
-                fi
-                
-                if [ -f /boot/limine.conf ]; then
-                    local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
-                    if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
-                        local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
-                        sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
-                    fi
-                fi
-                
-                sudo limine-enroll-config
-                sudo limine-update
-            fi
-            ;;
-        "grub")
-            if command -v grub-install &>/dev/null; then
-                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-            fi
-            ;;
-        *)
-            sudo sbctl sign -s /boot/vmlinuz-linux || true
-            ;;
-    esac
+    if [[ "$bootloader" == "systemd-boot" ]]; then
+        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+        fi
+    fi
+    
+    sudo sbctl sign -s /boot/vmlinuz-linux
+    
+    if [[ -f /boot/EFI/BOOT/BOOTX64.EFI ]]; then
+        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+    fi
+    
+    if [[ -f /boot/EFI/Linux/arch-linux.efi ]]; then
+        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
+    fi
     
     sudo sbctl verify
 }
