@@ -462,10 +462,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman git neovim gamemode fastfetch
+            sudo apt install -y podman git neovim gamemode fastfetch curl
             ;;
         arch)
-            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode
+            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode curl
             ;;
     esac
 }
@@ -774,7 +774,7 @@ install_nvidia_debian() {
             return 1
         fi
         
-        wget https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
+        curl -LO https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt update
         sudo apt -y install nvidia-open
