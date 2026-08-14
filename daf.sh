@@ -78,6 +78,47 @@ detect_cpu() {
     fi
 }
 
+detect_motherboard_brand() {
+    local brand=""
+    
+    if [ -f /sys/class/dmi/id/board_vendor ]; then
+        brand=$(cat /sys/class/dmi/id/board_vendor 2>/dev/null)
+    fi
+    
+    if [ -z "$brand" ] || [ "$brand" == "Unknown" ] || [ "$brand" == "To be filled by O.E.M." ]; then
+        if [ -f /sys/class/dmi/id/sys_vendor ]; then
+            brand=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)
+        fi
+    fi
+    
+    case "$brand" in
+        *"ASUS"*|*"Asus"*)
+            echo "asus" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"Gigabyte"*|*"GIGABYTE"*)
+            echo "gigabyte" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"MSI"*|*"Micro-Star"*)
+            echo "msi" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"Acer"*)
+            echo "acer" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"Dell"*)
+            echo "dell" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"HP"*|*"Hewlett-Packard"*)
+            echo "hp" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *"Lenovo"*)
+            echo "lenovo" > "$STATE_DIR/motherboard_brand"
+            ;;
+        *)
+            echo "gigabyte" > "$STATE_DIR/motherboard_brand"
+            ;;
+    esac
+}
+
 detect_bootloader() {
     local bootloader=""
     
@@ -168,6 +209,7 @@ detect_secureboot_support() {
 setup_secureboot_arch() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
     
     if [[ "$secureboot_state" == "enabled" ]]; then
         return 0
@@ -176,9 +218,12 @@ setup_secureboot_arch() {
     sudo pacman -S --noconfirm sbctl
     sudo sbctl create-keys
     
-    if sudo sbctl enroll-keys --microsoft 2>&1 | grep -q "firmware-builtin"; then
+    # ASUS e Gigabyte não devem usar --firmware-builtin
+    if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
+        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft (sem --firmware-builtin)${NC}"
         sudo sbctl enroll-keys --microsoft
     else
+        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
@@ -560,7 +605,7 @@ install_desktop() {
                     sudo systemctl enable plasmalogin
                     ;;
                 cosmic)
-                    sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk
+                    sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk xdg-user-dirs
                     sudo systemctl enable cosmic-greeter
                     ;;
                 dank)
@@ -886,6 +931,7 @@ main() {
     detect_distro
     detect_gpu
     detect_cpu
+    detect_motherboard_brand
     detect_bootloader
     detect_secureboot_support
     select_desktop
