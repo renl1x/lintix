@@ -219,8 +219,10 @@ setup_secureboot_arch() {
     sudo sbctl create-keys
     
     if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
+        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft (sem --firmware-builtin)${NC}"
         sudo sbctl enroll-keys --microsoft
     else
+        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
@@ -228,24 +230,18 @@ setup_secureboot_arch() {
     
     sudo sbctl sign -s /boot/vmlinuz-linux || true
     
-    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
-    fi
-    
-    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
-    fi
-    
-    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-    fi
-    
-    if [ -f /boot/EFI/BOOT/BOOTX64.efi ]; then
-        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.efi
+    if [ -f /boot/vmlinuz-linux-lts ]; then
+        sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
     fi
     
     case "$bootloader" in
         "systemd-boot")
+            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
+            fi
+            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+            fi
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
                 sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
             fi
@@ -270,19 +266,23 @@ setup_secureboot_arch() {
                 sudo limine-enroll-config
                 sudo limine-update
             fi
-            if [ -f /boot/limine.efi ]; then
-                sudo sbctl sign -s /boot/limine.efi
-            fi
             ;;
         "grub")
             if command -v grub-install &>/dev/null; then
                 sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
             fi
-            if [ -f /boot/efi/EFI/GRUB/grubx64.efi ]; then
-                sudo sbctl sign -s /boot/efi/EFI/GRUB/grubx64.efi
+            if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
+                sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi
             fi
             ;;
+        *)
+            echo "${YELLOW}⚠ Bootloader não detectado. Assinando kernel padrão...${NC}"
+            ;;
     esac
+    
+    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
+        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi
+    fi
     
     sudo sbctl verify
 }
