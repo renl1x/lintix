@@ -226,7 +226,6 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    # Se não detectou bootloader, assume systemd-boot
     if [[ -z "$bootloader" ]]; then
         echo "${YELLOW}⚠ Bootloader não detectado. Assumindo systemd-boot...${NC}"
         bootloader="systemd-boot"
@@ -240,7 +239,17 @@ setup_secureboot_arch() {
             
             echo "${YELLOW}Assinando bootloader...${NC}"
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+                sudo sbctl sign -s /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+            fi
+            
+            echo "${YELLOW}Assinando BOOTX64.EFI...${NC}"
+            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+            fi
+            
+            echo "${YELLOW}Assinando systemd-boot no ESP...${NC}"
+            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
             fi
             
             echo "${YELLOW}Assinando UKI...${NC}"
