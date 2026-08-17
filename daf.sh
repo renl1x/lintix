@@ -122,7 +122,7 @@ detect_motherboard_brand() {
 detect_bootloader() {
     local bootloader=""
     
-    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -d /boot/loader ] || [ -f /boot/loader/loader.conf ]; then
         bootloader="systemd-boot"
     elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
         bootloader="limine"
@@ -226,6 +226,13 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
+    # Se não detectou bootloader, assume systemd-boot
+    if [[ -z "$bootloader" ]]; then
+        echo "${YELLOW}⚠ Bootloader não detectado. Assumindo systemd-boot...${NC}"
+        bootloader="systemd-boot"
+        echo "systemd-boot" > "$STATE_DIR/bootloader"
+    fi
+    
     case "$bootloader" in
         "systemd-boot")
             echo "${YELLOW}Instalando systemd-boot...${NC}"
@@ -292,7 +299,7 @@ setup_secureboot_arch() {
             ;;
             
         *)
-            echo "${YELLOW}Bootloader não detectado. Assinando kernel padrão...${NC}"
+            echo "${YELLOW}Bootloader não suportado. Assinando kernel apenas...${NC}"
             sudo sbctl sign -s /boot/vmlinuz-linux || true
             sudo sbctl verify
             ;;
