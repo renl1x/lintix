@@ -237,7 +237,7 @@ setup_secureboot_arch() {
             echo "${YELLOW}Instalando systemd-boot...${NC}"
             sudo bootctl install
             
-            echo "${YELLOW}Assinando todos os arquivos do bootloader...${NC}"
+            echo "${YELLOW}Assinando arquivos do boot...${NC}"
             
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
                 sudo sbctl sign -s /usr/lib/systemd/boot/efi/systemd-bootx64.efi
@@ -251,33 +251,17 @@ setup_secureboot_arch() {
                 sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
             fi
             
-            echo "${YELLOW}Assinando UKI...${NC}"
+            echo "${YELLOW}Gerando UKI...${NC}"
+            sudo mkinitcpio -P
+            
             if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
                 sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-            else
-                echo "${YELLOW}⚠ UKI não encontrado. Gerando com mkinitcpio...${NC}"
-                sudo mkinitcpio -P
-                if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-                    sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-                fi
             fi
             
             echo "${YELLOW}Assinando kernel...${NC}"
             sudo sbctl sign -s /boot/vmlinuz-linux
             
             echo "${YELLOW}Verificando assinaturas...${NC}"
-            sudo sbctl verify
-            
-            echo "${YELLOW}Verificando manualmente os arquivos...${NC}"
-            for file in /boot/EFI/BOOT/BOOTX64.EFI /boot/EFI/systemd/systemd-bootx64.efi; do
-                if [ -f "$file" ]; then
-                    if ! sbctl verify "$file" 2>/dev/null | grep -q "signed"; then
-                        echo "${YELLOW}⚠ $file não assinado. Tentando novamente...${NC}"
-                        sudo sbctl sign -s "$file"
-                    fi
-                fi
-            done
-            
             sudo sbctl verify
             ;;
             
@@ -857,7 +841,8 @@ setup_btrfs_compression() {
 
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
-        return    fi
+        return
+    fi
     
     if ! sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
         return
