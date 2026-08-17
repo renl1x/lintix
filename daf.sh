@@ -226,70 +226,47 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    sudo sbctl verify || true
+    sudo sbctl verify
     
-    if [ -f /boot/vmlinuz-linux ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux 2>/dev/null || true
-    fi
-    
-    if [ -f /boot/vmlinuz-linux-lts ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux-lts 2>/dev/null || true
-    fi
-    
-    case "$bootloader" in
-        "systemd-boot")
-            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi 2>/dev/null || true
+    if [[ "$bootloader" == "systemd-boot" ]]; then
+        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+        fi
+        
+        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
+        fi
+        
+        sudo bootctl install
+    elif [[ "$bootloader" == "limine" ]]; then
+        if command -v limine-enroll-config &>/dev/null; then
+            if [ -f /etc/default/limine ]; then
+                sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+            else
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
             fi
-            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null || true
-            fi
-            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi 2>/dev/null || true
-            fi
-            ;;
-        "limine")
-            if command -v limine-enroll-config &>/dev/null; then
-                if [ -f /etc/default/limine ]; then
-                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
-                else
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+            
+            if [ -f /boot/limine.conf ]; then
+                local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
+                if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
+                    local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
+                    sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
                 fi
-                
-                if [ -f /boot/limine.conf ]; then
-                    local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
-                    if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
-                        local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
-                        sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
-                    fi
-                fi
-                
-                sudo limine-enroll-config
-                sudo limine-update
             fi
-            if [ -f /boot/limine.efi ]; then
-                sudo sbctl sign -s /boot/limine.efi 2>/dev/null || true
-            fi
-            ;;
-        "grub")
-            if command -v grub-install &>/dev/null; then
-                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-            fi
-            if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi 2>/dev/null || true
-            fi
-            ;;
-        *)
-            echo "${YELLOW}⚠ Bootloader não detectado. Assinando kernel padrão...${NC}"
-            ;;
-    esac
-    
-    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi 2>/dev/null || true
+            
+            sudo limine-enroll-config
+            sudo limine-update
+        fi
+    elif [[ "$bootloader" == "grub" ]]; then
+        if command -v grub-install &>/dev/null; then
+            sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+        fi
+    else
+        sudo sbctl sign -s /boot/vmlinuz-linux || true
     fi
     
-    sudo sbctl verify || true
+    sudo sbctl verify
 }
 
 setup_secureboot() {
@@ -537,10 +514,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman git neovim gamemode fastfetch
+            sudo apt install -y podman git nano gamemode fastfetch
             ;;
         arch)
-            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode
+            sudo pacman -S --noconfirm podman git nano fastfetch gamemode
             ;;
     esac
 }
@@ -933,7 +910,7 @@ remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt remove -y nano vim-common
+        sudo apt remove -y vim-common
         sudo apt autoremove -y
     fi
 }
