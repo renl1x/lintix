@@ -237,29 +237,25 @@ setup_secureboot_arch() {
             echo "${YELLOW}Instalando systemd-boot...${NC}"
             sudo bootctl install
             
-            echo "${YELLOW}Assinando arquivos do boot...${NC}"
-            
-            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /usr/lib/systemd/boot/efi/systemd-bootx64.efi
-            fi
-            
-            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
-            fi
-            
-            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
-            fi
+            echo "${YELLOW}Assinando kernel...${NC}"
+            sudo sbctl sign -s /boot/vmlinuz-linux
             
             echo "${YELLOW}Gerando UKI...${NC}"
             sudo mkinitcpio -P
             
             if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+                echo "${YELLOW}Assinando UKI...${NC}"
                 sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
             fi
             
-            echo "${YELLOW}Assinando kernel...${NC}"
-            sudo sbctl sign -s /boot/vmlinuz-linux
+            echo "${YELLOW}Assinando bootloader no ESP...${NC}"
+            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
+            fi
+            
+            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+            fi
             
             echo "${YELLOW}Verificando assinaturas...${NC}"
             sudo sbctl verify
