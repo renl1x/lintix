@@ -226,47 +226,80 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    sudo sbctl verify
-    
-    if [[ "$bootloader" == "systemd-boot" ]]; then
-        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-            sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
-        fi
-        
-        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-        fi
-        
-        sudo bootctl install
-    elif [[ "$bootloader" == "limine" ]]; then
-        if command -v limine-enroll-config &>/dev/null; then
-            if [ -f /etc/default/limine ]; then
-                sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
-                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
-            else
-                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+    case "$bootloader" in
+        "systemd-boot")
+            echo "${YELLOW}Instalando systemd-boot...${NC}"
+            sudo bootctl install
+            
+            echo "${YELLOW}Assinando bootloader...${NC}"
+            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
             fi
             
-            if [ -f /boot/limine.conf ]; then
-                local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
-                if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
-                    local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
-                    sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
+            echo "${YELLOW}Assinando UKI...${NC}"
+            if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+                sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
+            else
+                echo "${YELLOW}⚠ UKI não encontrado. Gerando com mkinitcpio...${NC}"
+                sudo mkinitcpio -P
+                if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+                    sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
                 fi
             fi
             
-            sudo limine-enroll-config
-            sudo limine-update
-        fi
-    elif [[ "$bootloader" == "grub" ]]; then
-        if command -v grub-install &>/dev/null; then
-            sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-        fi
-    else
-        sudo sbctl sign -s /boot/vmlinuz-linux || true
-    fi
+            echo "${YELLOW}Assinando kernel...${NC}"
+            sudo sbctl sign -s /boot/vmlinuz-linux
+            
+            echo "${YELLOW}Verificando assinaturas...${NC}"
+            sudo sbctl verify
+            ;;
+            
+        "limine")
+            echo "${YELLOW}Configurando Limine para Secure Boot...${NC}"
+            if command -v limine-enroll-config &>/dev/null; then
+                if [ -f /etc/default/limine ]; then
+                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+                else
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+                fi
+                
+                if [ -f /boot/limine.conf ]; then
+                    local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
+                    if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
+                        local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
+                        sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
+                    fi
+                fi
+                
+                sudo limine-enroll-config
+                sudo limine-update
+                
+                echo "${YELLOW}Assinando kernel...${NC}"
+                sudo sbctl sign -s /boot/vmlinuz-linux
+                sudo sbctl verify
+            fi
+            ;;
+            
+        "grub")
+            echo "${YELLOW}Configurando GRUB para Secure Boot...${NC}"
+            if command -v grub-install &>/dev/null; then
+                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+                echo "${YELLOW}Assinando kernel...${NC}"
+                sudo sbctl sign -s /boot/vmlinuz-linux
+                sudo sbctl verify
+            fi
+            ;;
+            
+        *)
+            echo "${YELLOW}Bootloader não detectado. Assinando kernel padrão...${NC}"
+            sudo sbctl sign -s /boot/vmlinuz-linux || true
+            sudo sbctl verify
+            ;;
+    esac
     
-    sudo sbctl verify
+    echo "${GREEN}✓ Secure Boot configurado!${NC}"
+    echo "${YELLOW}Reinicie o sistema e ative o Secure Boot na BIOS/UEFI${NC}"
 }
 
 setup_secureboot() {
