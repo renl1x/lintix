@@ -135,9 +135,7 @@ detect_bootloader() {
     fi
     
     if [ -z "$bootloader" ]; then
-        if [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
-            bootloader="limine"
-        elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
+        if [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
             bootloader="grub"
         elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
             bootloader="uki"
@@ -296,51 +294,64 @@ setup_secureboot() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
-    if [[ "$bootloader" != "systemd-boot" ]]; then
-        return 1
-    fi
-    
-    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-    
-    if [ -z "$esp_path" ]; then
-        if [ -d /boot/loader ]; then
-            esp_path="/boot"
-        elif [ -d /boot/efi/loader ]; then
-            esp_path="/boot/efi"
-        elif [ -d /boot/EFI/systemd ]; then
-            esp_path="/boot"
-        elif [ -d /boot/efi/EFI/systemd ]; then
-            esp_path="/boot/efi"
-        else
-            if mount | grep -q "/boot/efi "; then
-                esp_path="/boot/efi"
-            elif mount | grep -q "/boot "; then
+    if [[ "$bootloader" == "systemd-boot" ]]; then
+        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+        
+        if [ -z "$esp_path" ]; then
+            if [ -d /boot/loader ]; then
                 esp_path="/boot"
+            elif [ -d /boot/efi/loader ]; then
+                esp_path="/boot/efi"
+            elif [ -d /boot/EFI/systemd ]; then
+                esp_path="/boot"
+            elif [ -d /boot/efi/EFI/systemd ]; then
+                esp_path="/boot/efi"
             else
-                return 1
+                if mount | grep -q "/boot/efi "; then
+                    esp_path="/boot/efi"
+                elif mount | grep -q "/boot "; then
+                    esp_path="/boot"
+                else
+                    return 1
+                fi
             fi
         fi
-    fi
-    
-    local loader_conf=""
-    if [ -f "${esp_path}/loader/loader.conf" ]; then
-        loader_conf="${esp_path}/loader/loader.conf"
-    elif [ -f "/boot/loader/loader.conf" ]; then
-        loader_conf="/boot/loader/loader.conf"
-    elif [ -f "/boot/efi/loader/loader.conf" ]; then
-        loader_conf="/boot/efi/loader/loader.conf"
-    else
-        if [ -d "${esp_path}/loader" ]; then
+        
+        local loader_conf=""
+        if [ -f "${esp_path}/loader/loader.conf" ]; then
             loader_conf="${esp_path}/loader/loader.conf"
-        elif [ -d "/boot/loader" ]; then
+        elif [ -f "/boot/loader/loader.conf" ]; then
             loader_conf="/boot/loader/loader.conf"
+        elif [ -f "/boot/efi/loader/loader.conf" ]; then
+            loader_conf="/boot/efi/loader/loader.conf"
         else
-            sudo mkdir -p "${esp_path}/loader"
-            loader_conf="${esp_path}/loader/loader.conf"
+            if [ -d "${esp_path}/loader" ]; then
+                loader_conf="${esp_path}/loader/loader.conf"
+            elif [ -d "/boot/loader" ]; then
+                loader_conf="/boot/loader/loader.conf"
+            else
+                sudo mkdir -p "${esp_path}/loader"
+                loader_conf="${esp_path}/loader/loader.conf"
+            fi
+        fi
+        
+        echo "timeout 2" | sudo tee "$loader_conf"
+        
+    elif [[ "$bootloader" == "grub" ]]; then
+        if [ -f /etc/default/grub ]; then
+            if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
+                sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
+            else
+                echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
+            fi
+            if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
+                sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
+            else
+                echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
+            fi
+            sudo update-grub
         fi
     fi
-    
-    echo "timeout 2" | sudo tee "$loader_conf"
 }
 
 select_desktop() {
