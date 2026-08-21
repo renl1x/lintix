@@ -44,6 +44,10 @@ show_option() {
     echo "  ${CYAN}$num${NC}) $desc"
 }
 
+# ============================================================================
+# DETECÇÃO DE HARDWARE E SISTEMA
+# ============================================================================
+
 detect_distro() {
     if [ -f /etc/debian_version ]; then
         echo "debian" > "$STATE_DIR/distro"
@@ -92,52 +96,225 @@ detect_motherboard_brand() {
     fi
     
     case "$brand" in
-        *"ASUS"*|*"Asus"*)
-            echo "asus" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"Gigabyte"*|*"GIGABYTE"*)
-            echo "gigabyte" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"MSI"*|*"Micro-Star"*)
-            echo "msi" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"Acer"*)
-            echo "acer" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"Dell"*)
-            echo "dell" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"HP"*|*"Hewlett-Packard"*)
-            echo "hp" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *"Lenovo"*)
-            echo "lenovo" > "$STATE_DIR/motherboard_brand"
-            ;;
-        *)
-            echo "gigabyte" > "$STATE_DIR/motherboard_brand"
-            ;;
+        *"ASUS"*|*"Asus"*) echo "asus" ;;
+        *"Gigabyte"*|*"GIGABYTE"*) echo "gigabyte" ;;
+        *"MSI"*|*"Micro-Star"*) echo "msi" ;;
+        *"Acer"*) echo "acer" ;;
+        *"Dell"*) echo "dell" ;;
+        *"HP"*|*"Hewlett-Packard"*) echo "hp" ;;
+        *"Lenovo"*) echo "lenovo" ;;
+        *) echo "gigabyte" ;;
     esac
 }
 
 detect_bootloader() {
-    local bootloader=""
-    
-    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-        bootloader="systemd-boot"
-    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
-        bootloader="limine"
-    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ]; then
-        bootloader="grub"
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ]; then
+        echo "systemd-boot"
+        return
     fi
     
-    echo "$bootloader" > "$STATE_DIR/bootloader"
+    if [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+        echo "limine"
+        return
+    fi
+    
+    if [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
+        echo "grub"
+        return
+    fi
+    
+    if [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
+        echo "uki"
+        return
+    fi
+    
+    echo "none"
 }
+
+detect_secureboot_support() {
+    if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
+        if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
+            echo "enabled" > "$STATE_DIR/secureboot_state"
+        else
+            echo "disabled" > "$STATE_DIR/secureboot_state"
+        fi
+        echo "supported" > "$STATE_DIR/secureboot_support"
+    else
+        echo "unsupported" > "$STATE_DIR/secureboot_support"
+    fi
+}
+
+# ============================================================================
+# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH
+# ============================================================================
+
+setup_secureboot_arch() {
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
+    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+    
+    if [[ "$secureboot_state" == "enabled" ]]; then
+        echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
+        sudo sbctl status
+        return 0
+    fi
+    
+    if [[ "$secureboot_state" == "unsupported" ]]; then
+        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI)${NC}"
+        return 1
+    fi
+    
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    echo "${GREEN}► Configurando Secure Boot${NC}"
+    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    
+    if ! command -v sbctl &>/dev/null; then
+        echo "${YELLOW}Instalando sbctl...${NC}"
+        sudo pacman -S --noconfirm sbctl
+    else
+        echo "${GREEN}✓ sbctl já está instalado${NC}"
+    fi
+    
+    echo "${YELLOW}Status sbctl:${NC}"
+    sudo sbctl status
+    
+    if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
+        echo "${YELLOW}Criando chaves Secure Boot...${NC}"
+        sudo sbctl create-keys
+    else
+        echo "${GREEN}✓ Chaves Secure Boot já existem${NC}"
+    fi
+    
+    if sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
+        echo "${GREEN}✓ Chaves já estão enrolladas${NC}"
+    else
+        echo "${YELLOW}Enrolando chaves...${NC}"
+        if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
+            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft${NC}"
+            sudo sbctl enroll-keys --microsoft
+        else
+            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
+            sudo sbctl enroll-keys --microsoft --firmware-builtin
+        fi
+    fi
+    
+    echo "${YELLOW}Verificando arquivos para assinar...${NC}"
+    sudo sbctl verify
+    
+    echo "${YELLOW}Assinando arquivos...${NC}"
+    
+    # Kernel
+    echo "  Assinando kernels..."
+    if [ -f /boot/vmlinuz-linux ]; then
+        sudo sbctl sign -s /boot/vmlinuz-linux || true
+    fi
+    if [ -f /boot/vmlinuz-linux-lts ]; then
+        sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
+    fi
+    
+    # UKI
+    echo "  Assinando UKI..."
+    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+    elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
+        sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
+    else
+        echo "    ⚠ UKI não encontrado. Gerando..."
+        sudo mkdir -p /boot/EFI/Linux
+        sudo mkinitcpio -P
+        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+        fi
+    fi
+    
+    # systemd-boot
+    if [[ "$bootloader" == "systemd-boot" ]] || [[ "$bootloader" == "uki" ]]; then
+        echo "  Assinando systemd-boot..."
+        if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
+        fi
+        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+        fi
+        if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+            sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
+        fi
+    fi
+    
+    # Limine
+    if [[ "$bootloader" == "limine" ]]; then
+        echo "  Assinando Limine..."
+        if [ -f /boot/EFI/LIMINE/limine.efi ]; then
+            sudo sbctl sign -s /boot/EFI/LIMINE/limine.efi || true
+        fi
+        if command -v limine-enroll-config &>/dev/null; then
+            echo "  Configurando Limine para Secure Boot..."
+            if [ -f /etc/default/limine ]; then
+                sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+            else
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+            fi
+            sudo limine-enroll-config
+            sudo limine-update
+        fi
+    fi
+    
+    # GRUB
+    if [[ "$bootloader" == "grub" ]]; then
+        echo "  Assinando GRUB..."
+        if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
+            sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi || true
+        fi
+        if command -v grub-install &>/dev/null; then
+            sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+        fi
+    fi
+    
+    # fwupd
+    echo "  Assinando fwupd..."
+    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
+        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
+    fi
+    
+    echo "${YELLOW}Verificando assinaturas finais...${NC}"
+    sudo sbctl verify
+    
+    echo ""
+    echo "${GREEN}✓ Secure Boot configurado!${NC}"
+    echo "${YELLOW}Recomenda-se:${NC}"
+    echo "  1. Reiniciar o sistema: sudo reboot"
+    echo "  2. Entrar na BIOS/UEFI e ativar o Secure Boot"
+    echo "  3. Verificar com: sbctl status"
+}
+
+setup_secureboot() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" != "arch" ]]; then
+        echo "${YELLOW}Secure Boot é suportado apenas no Arch Linux. Pulando...${NC}"
+        return
+    fi
+    
+    local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
+    
+    if [[ "$secureboot_support" == "unsupported" ]]; then
+        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI). Pulando...${NC}"
+        return
+    fi
+    
+    setup_secureboot_arch
+}
+
+# ============================================================================
+# CONFIGURAÇÃO DE BOOT TIMEOUT
+# ============================================================================
 
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
     case "$bootloader" in
-        "systemd-boot")
+        "systemd-boot"|"uki")
             if [ -d /boot/EFI/systemd ]; then
                 local loader_conf="/boot/EFI/systemd/loader.conf"
             elif [ -d /boot/loader ]; then
@@ -185,128 +362,9 @@ setup_boot_timeout() {
     esac
 }
 
-detect_secureboot_support() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [ "$distro" == "arch" ]; then
-        if ! command -v mokutil &>/dev/null; then
-            sudo pacman -S --noconfirm mokutil
-        fi
-    fi
-    
-    if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
-        if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
-            echo "enabled" > "$STATE_DIR/secureboot_state"
-        else
-            echo "disabled" > "$STATE_DIR/secureboot_state"
-        fi
-        echo "supported" > "$STATE_DIR/secureboot_support"
-    else
-        echo "unsupported" > "$STATE_DIR/secureboot_support"
-    fi
-}
-
-setup_secureboot_arch() {
-    local bootloader=$(cat "$STATE_DIR/bootloader")
-    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
-    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
-    
-    if [[ "$secureboot_state" == "enabled" ]]; then
-        return 0
-    fi
-    
-    sudo pacman -S --noconfirm sbctl
-    
-    echo "${YELLOW}Status sbctl:${NC}"
-    sudo sbctl status
-    
-    echo "${YELLOW}Criando chaves Secure Boot...${NC}"
-    sudo sbctl create-keys
-    
-    if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
-        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft (sem --firmware-builtin)${NC}"
-        sudo sbctl enroll-keys --microsoft
-    else
-        echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
-        sudo sbctl enroll-keys --microsoft --firmware-builtin
-    fi
-    
-    echo "${YELLOW}Verificando arquivos para assinar...${NC}"
-    sudo sbctl verify
-    
-    echo "${YELLOW}Assinando kernel...${NC}"
-    sudo sbctl sign -s /boot/vmlinuz-linux || true
-    sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
-    
-    case "$bootloader" in
-        "systemd-boot")
-            echo "${YELLOW}Assinando systemd-boot...${NC}"
-            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
-            fi
-            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
-            fi
-            ;;
-        "limine")
-            echo "${YELLOW}Assinando Limine...${NC}"
-            if [ -f /boot/EFI/LIMINE/limine.efi ]; then
-                sudo sbctl sign -s /boot/EFI/LIMINE/limine.efi
-            fi
-            if command -v limine-enroll-config &>/dev/null; then
-                if [ -f /etc/default/limine ]; then
-                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
-                else
-                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
-                fi
-                sudo limine-enroll-config
-                sudo limine-update
-            fi
-            ;;
-        "grub")
-            echo "${YELLOW}Assinando GRUB...${NC}"
-            if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi
-            fi
-            if command -v grub-install &>/dev/null; then
-                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-            fi
-            ;;
-    esac
-    
-    echo "${YELLOW}Assinando BOOTX64.EFI...${NC}"
-    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
-    fi
-    
-    echo "${YELLOW}Assinando fwupd...${NC}"
-    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi
-    fi
-    
-    echo "${YELLOW}Verificando assinaturas finais...${NC}"
-    sudo sbctl verify
-    
-    echo "${GREEN}✓ Secure Boot configurado!${NC}"
-    echo "${YELLOW}Recomenda-se regenerar o initramfs: sudo mkinitcpio -P${NC}"
-}
-
-setup_secureboot() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" != "arch" ]]; then
-        return
-    fi
-    
-    local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
-    
-    if [[ "$secureboot_support" == "unsupported" ]]; then
-        return
-    fi
-    
-    setup_secureboot_arch
-}
+# ============================================================================
+# FUNÇÕES DE SELEÇÃO INTERATIVAS
+# ============================================================================
 
 select_desktop() {
     clear_screen
@@ -497,6 +555,10 @@ select_extras() {
     sleep 1
 }
 
+# ============================================================================
+# CONFIGURAÇÃO DE REPOSITÓRIOS
+# ============================================================================
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -532,6 +594,10 @@ setup_sources() {
     esac
 }
 
+# ============================================================================
+# INSTALAÇÃO DE PACOTES BASE
+# ============================================================================
+
 install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -544,6 +610,10 @@ install_base() {
             ;;
     esac
 }
+
+# ============================================================================
+# CONFIGURAÇÃO DE SEGURANÇA
+# ============================================================================
 
 setup_security() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -569,6 +639,10 @@ setup_security() {
     esac
 }
 
+# =============================================================================
+# GERENCIADORES DE PACOTES (FLATPAK, ETC)
+# =============================================================================
+
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
@@ -591,6 +665,10 @@ setup_package_managers() {
             ;;
     esac
 }
+
+# =============================================================================
+# INSTALAÇÃO DE DESKTOP
+# =============================================================================
 
 install_desktop() {
     local desktop=$(cat "$STATE_DIR/desktop")
@@ -640,6 +718,10 @@ install_desktop() {
             ;;
     esac
 }
+
+# =============================================================================
+# INSTALAÇÃO DE APLICATIVOS
+# =============================================================================
 
 install_produtividade() {
     local prod=$(cat "$STATE_DIR/produtividade")
@@ -770,6 +852,10 @@ install_extras() {
     done
 }
 
+# =============================================================================
+# CONFIGURAÇÕES ESPECÍFICAS DO DEBIAN
+# =============================================================================
+
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -817,6 +903,10 @@ setup_btrfs_compression() {
         fi
     fi
 }
+
+# =============================================================================
+# DRIVERS
+# =============================================================================
 
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
@@ -921,6 +1011,10 @@ install_cpu_microcode() {
     esac
 }
 
+# =============================================================================
+# CONFIGURAÇÕES DE PERFORMANCE
+# =============================================================================
+
 setup_performance_vars() {
     sudo mkdir -p /etc/environment.d
     sudo tee /etc/environment.d/performance.conf > /dev/null <<EOF
@@ -928,6 +1022,10 @@ MESA_SHADER_CACHE_MAX_SIZE=12G
 __GL_SHADER_DISK_CACHE_SIZE=12000000000
 EOF
 }
+
+# =============================================================================
+# LIMPEZA DE PACOTES INDESEJADOS
+# =============================================================================
 
 remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -937,6 +1035,10 @@ remove_packages() {
         sudo apt autoremove -y
     fi
 }
+
+# =============================================================================
+# REINICIALIZAÇÃO
+# =============================================================================
 
 ask_reboot() {
     echo ""
@@ -949,18 +1051,31 @@ ask_reboot() {
     fi
 }
 
+# =============================================================================
+# FUNÇÃO PRINCIPAL
+# =============================================================================
+
 main() {
     detect_distro
     detect_gpu
     detect_cpu
-    detect_motherboard_brand
+    
+    # Detecta marca da placa-mãe para Secure Boot
+    if [ -f /sys/class/dmi/id/board_vendor ]; then
+        detect_motherboard_brand
+    else
+        echo "gigabyte" > "$STATE_DIR/motherboard_brand"
+    fi
+    
     detect_bootloader
     detect_secureboot_support
+    
     select_desktop
     select_produtividade
     select_multimidia
     select_games
     select_extras
+    
     setup_sources
     install_base
     setup_security
