@@ -126,15 +126,28 @@ detect_bootloader() {
 }
 
 detect_secureboot_support() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    # Instala mokutil no Arch se necessário
+    if [ "$distro" == "arch" ]; then
+        if ! command -v mokutil &>/dev/null; then
+            echo "${YELLOW}Instalando mokutil para detectar Secure Boot...${NC}"
+            sudo pacman -S --noconfirm mokutil
+        fi
+    fi
+    
     if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
         if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
             echo "enabled" > "$STATE_DIR/secureboot_state"
+            echo "${GREEN}✓ Secure Boot está ativo${NC}"
         else
             echo "disabled" > "$STATE_DIR/secureboot_state"
+            echo "${YELLOW}⚠ Secure Boot está desativado${NC}"
         fi
         echo "supported" > "$STATE_DIR/secureboot_support"
     else
         echo "unsupported" > "$STATE_DIR/secureboot_support"
+        echo "${YELLOW}⚠ Sistema em modo BIOS ou sem UEFI${NC}"
     fi
 }
 
