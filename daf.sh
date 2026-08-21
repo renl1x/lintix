@@ -112,12 +112,6 @@ detect_bootloader() {
     
     if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ]; then
         bootloader="systemd-boot"
-    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
-        bootloader="limine"
-    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
-        bootloader="grub"
-    elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
-        bootloader="uki"
     else
         bootloader="none"
     fi
@@ -152,13 +146,19 @@ detect_secureboot_support() {
 }
 
 # ============================================================================
-# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH
+# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH (APENAS SYSTEMD-BOOT)
 # ============================================================================
 
 setup_secureboot_arch() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
     local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+    
+    if [[ "$bootloader" != "systemd-boot" ]]; then
+        echo "${YELLOW}⚠ Secure Boot só é suportado com systemd-boot. Bootloader atual: ${bootloader}${NC}"
+        echo "${YELLOW}Pulando configuração do Secure Boot...${NC}"
+        return 0
+    fi
     
     if [[ "$secureboot_state" == "enabled" ]]; then
         echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
@@ -230,47 +230,15 @@ setup_secureboot_arch() {
     fi
     
     # systemd-boot
-    if [[ "$bootloader" == "systemd-boot" ]] || [[ "$bootloader" == "uki" ]]; then
-        echo "  Assinando systemd-boot..."
-        if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-            sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
-        fi
-        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-            sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
-        fi
-        if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-            sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
-        fi
+    echo "  Assinando systemd-boot..."
+    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
     fi
-    
-    # Limine
-    if [[ "$bootloader" == "limine" ]]; then
-        echo "  Assinando Limine..."
-        if [ -f /boot/EFI/LIMINE/limine.efi ]; then
-            sudo sbctl sign -s /boot/EFI/LIMINE/limine.efi || true
-        fi
-        if command -v limine-enroll-config &>/dev/null; then
-            echo "  Configurando Limine para Secure Boot..."
-            if [ -f /etc/default/limine ]; then
-                sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
-                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
-            else
-                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
-            fi
-            sudo limine-enroll-config
-            sudo limine-update
-        fi
+    if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+        sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
     fi
-    
-    # GRUB
-    if [[ "$bootloader" == "grub" ]]; then
-        echo "  Assinando GRUB..."
-        if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
-            sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi || true
-        fi
-        if command -v grub-install &>/dev/null; then
-            sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-        fi
+    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
     fi
     
     # fwupd
@@ -316,7 +284,7 @@ setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
     case "$bootloader" in
-        "systemd-boot"|"uki")
+        "systemd-boot")
             if [ -d /boot/EFI/systemd ]; then
                 local loader_conf="/boot/EFI/systemd/loader.conf"
             elif [ -d /boot/loader ]; then
@@ -336,30 +304,9 @@ setup_boot_timeout() {
             fi
             ;;
             
-        "limine")
-            if [ -f /boot/limine.conf ]; then
-                if grep -q "^TIMEOUT" /boot/limine.conf; then
-                    sudo sed -i 's/^TIMEOUT=.*/TIMEOUT=2/' /boot/limine.conf
-                else
-                    echo "TIMEOUT=2" | sudo tee -a /boot/limine.conf
-                fi
-            fi
-            ;;
-            
-        "grub")
-            if [ -f /etc/default/grub ]; then
-                if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
-                    sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
-                else
-                    echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
-                fi
-                if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
-                    sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
-                else
-                    echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
-                fi
-                sudo update-grub
-            fi
+        *)
+            echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
+            return 1
             ;;
     esac
 }
