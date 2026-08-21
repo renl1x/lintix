@@ -108,27 +108,21 @@ detect_motherboard_brand() {
 }
 
 detect_bootloader() {
+    local bootloader=""
+    
     if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ]; then
-        echo "systemd-boot"
-        return
+        bootloader="systemd-boot"
+    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+        bootloader="limine"
+    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
+        bootloader="grub"
+    elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
+        bootloader="uki"
+    else
+        bootloader="none"
     fi
     
-    if [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
-        echo "limine"
-        return
-    fi
-    
-    if [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
-        echo "grub"
-        return
-    fi
-    
-    if [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
-        echo "uki"
-        return
-    fi
-    
-    echo "none"
+    echo "$bootloader" > "$STATE_DIR/bootloader"
 }
 
 detect_secureboot_support() {
@@ -157,11 +151,6 @@ setup_secureboot_arch() {
         echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
         sudo sbctl status
         return 0
-    fi
-    
-    if [[ "$secureboot_state" == "unsupported" ]]; then
-        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI)${NC}"
-        return 1
     fi
     
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
@@ -1061,11 +1050,7 @@ main() {
     detect_cpu
     
     # Detecta marca da placa-mãe para Secure Boot
-    if [ -f /sys/class/dmi/id/board_vendor ]; then
-        detect_motherboard_brand
-    else
-        echo "gigabyte" > "$STATE_DIR/motherboard_brand"
-    fi
+    detect_motherboard_brand
     
     detect_bootloader
     detect_secureboot_support
