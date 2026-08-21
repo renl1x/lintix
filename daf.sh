@@ -110,13 +110,15 @@ detect_motherboard_brand() {
 detect_bootloader() {
     local bootloader=""
     
-    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ]; then
+    # Verifica systemd-boot
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ] || [ -d /boot/loader ]; then
         bootloader="systemd-boot"
     else
         bootloader="none"
     fi
     
     echo "$bootloader" > "$STATE_DIR/bootloader"
+    echo "${GREEN}✓ Bootloader detectado: ${bootloader}${NC}"
 }
 
 detect_secureboot_support() {
@@ -283,29 +285,40 @@ setup_secureboot() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
+    echo "${YELLOW}Configurando timeout para 2 segundos...${NC}"
+    
     case "$bootloader" in
         "systemd-boot")
-            if [ -d /boot/EFI/systemd ]; then
-                local loader_conf="/boot/EFI/systemd/loader.conf"
-            elif [ -d /boot/loader ]; then
-                local loader_conf="/boot/loader/loader.conf"
-            else
-                return 1
+            local loader_conf=""
+            
+            # Procura o arquivo loader.conf em diferentes locais
+            if [ -f /boot/EFI/systemd/loader.conf ]; then
+                loader_conf="/boot/EFI/systemd/loader.conf"
+            elif [ -f /boot/loader/loader.conf ]; then
+                loader_conf="/boot/loader/loader.conf"
+            elif [ -f /efi/loader/loader.conf ]; then
+                loader_conf="/efi/loader/loader.conf"
             fi
             
-            if [ -f "$loader_conf" ]; then
+            if [ -n "$loader_conf" ]; then
+                echo "${YELLOW}Arquivo encontrado: ${loader_conf}${NC}"
                 if grep -q "^timeout" "$loader_conf"; then
                     sudo sed -i 's/^timeout.*/timeout 2/' "$loader_conf"
                 else
                     echo "timeout 2" | sudo tee -a "$loader_conf"
                 fi
+                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
             else
-                echo "timeout 2" | sudo tee "$loader_conf"
+                echo "${RED}⚠ Arquivo loader.conf não encontrado. Criando...${NC}"
+                # Tenta criar em /boot/loader/
+                sudo mkdir -p /boot/loader
+                echo "timeout 2" | sudo tee /boot/loader/loader.conf
+                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
             fi
             ;;
             
         *)
-            echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
+            echo "${YELLOW}⚠ Bootloader não suportado ou não encontrado. Pulando configuração de timeout.${NC}"
             return 1
             ;;
     esac
