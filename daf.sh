@@ -122,7 +122,7 @@ detect_motherboard_brand() {
 detect_bootloader() {
     local bootloader=""
     
-    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -d /boot/loader ] || [ -f /boot/loader/loader.conf ]; then
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
         bootloader="systemd-boot"
     elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
         bootloader="limine"
@@ -226,63 +226,16 @@ setup_secureboot_arch() {
         sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
-    if [[ -z "$bootloader" ]]; then
-        echo "${YELLOW}⚠ Bootloader não detectado. Assumindo systemd-boot...${NC}"
-        bootloader="systemd-boot"
-        echo "systemd-boot" > "$STATE_DIR/bootloader"
-    fi
+    sudo sbctl verify
+    sudo sbctl-batch-sign || sudo sbctl sign -s /boot/vmlinuz-linux || true
     
     case "$bootloader" in
         "systemd-boot")
-            echo "${YELLOW}Instalando systemd-boot...${NC}"
-            sudo bootctl install
-            
-            echo "${YELLOW}Assinando todos os arquivos do bootloader...${NC}"
-            
             if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
             fi
-            
-            if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-                sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
-            fi
-            
-            if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-                sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
-            fi
-            
-            echo "${YELLOW}Assinando UKI...${NC}"
-            if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-                sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-            else
-                echo "${YELLOW}⚠ UKI não encontrado. Gerando com mkinitcpio...${NC}"
-                sudo mkinitcpio -P
-                if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-                    sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi
-                fi
-            fi
-            
-            echo "${YELLOW}Assinando kernel...${NC}"
-            sudo sbctl sign -s /boot/vmlinuz-linux
-            
-            echo "${YELLOW}Verificando assinaturas...${NC}"
-            sudo sbctl verify
-            
-            echo "${YELLOW}Verificando manualmente os arquivos...${NC}"
-            for file in /boot/EFI/BOOT/BOOTX64.EFI /boot/EFI/systemd/systemd-bootx64.efi; do
-                if [ -f "$file" ]; then
-                    if ! sbctl verify "$file" 2>/dev/null | grep -q "signed"; then
-                        echo "${YELLOW}⚠ $file não assinado. Tentando novamente...${NC}"
-                        sudo sbctl sign -s "$file"
-                    fi
-                fi
-            done
-            
-            sudo sbctl verify
             ;;
-            
         "limine")
-            echo "${YELLOW}Configurando Limine para Secure Boot...${NC}"
             if command -v limine-enroll-config &>/dev/null; then
                 if [ -f /etc/default/limine ]; then
                     sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
@@ -301,32 +254,19 @@ setup_secureboot_arch() {
                 
                 sudo limine-enroll-config
                 sudo limine-update
-                
-                echo "${YELLOW}Assinando kernel...${NC}"
-                sudo sbctl sign -s /boot/vmlinuz-linux
-                sudo sbctl verify
             fi
             ;;
-            
         "grub")
-            echo "${YELLOW}Configurando GRUB para Secure Boot...${NC}"
             if command -v grub-install &>/dev/null; then
                 sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
-                echo "${YELLOW}Assinando kernel...${NC}"
-                sudo sbctl sign -s /boot/vmlinuz-linux
-                sudo sbctl verify
             fi
             ;;
-            
         *)
-            echo "${YELLOW}Bootloader não suportado. Assinando kernel apenas...${NC}"
             sudo sbctl sign -s /boot/vmlinuz-linux || true
-            sudo sbctl verify
             ;;
     esac
     
-    echo "${GREEN}✓ Secure Boot configurado!${NC}"
-    echo "${YELLOW}Reinicie o sistema e ative o Secure Boot na BIOS/UEFI${NC}"
+    sudo sbctl verify
 }
 
 setup_secureboot() {
@@ -857,7 +797,8 @@ setup_btrfs_compression() {
 
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
-        return    fi
+        return
+    fi
     
     if ! sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
         return
