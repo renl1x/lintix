@@ -44,10 +44,6 @@ show_option() {
     echo "  ${CYAN}$num${NC}) $desc"
 }
 
-# ============================================================================
-# DETECÇÃO DE HARDWARE E SISTEMA
-# ============================================================================
-
 detect_distro() {
     if [ -f /etc/debian_version ]; then
         echo "debian" > "$STATE_DIR/distro"
@@ -111,7 +107,6 @@ detect_bootloader() {
     local bootloader=""
     local esp_path=""
     
-    # Encontra a partição ESP
     if mount | grep -q "/boot/efi "; then
         esp_path="/boot/efi"
     elif mount | grep -q "/boot "; then
@@ -128,7 +123,6 @@ detect_bootloader() {
         fi
     fi
     
-    # Fallback: verifica com bootctl
     if [ -z "$bootloader" ] && command -v bootctl &>/dev/null; then
         if sudo bootctl status 2>/dev/null | grep -q "systemd-boot"; then
             bootloader="systemd-boot"
@@ -161,7 +155,6 @@ detect_secureboot_support() {
     
     if [ "$distro" == "arch" ]; then
         if ! command -v mokutil &>/dev/null; then
-            echo "${YELLOW}Instalando mokutil para detectar Secure Boot...${NC}"
             sudo pacman -S --noconfirm mokutil
         fi
     fi
@@ -180,10 +173,6 @@ detect_secureboot_support() {
         echo "${YELLOW}⚠ Sistema em modo BIOS ou sem UEFI${NC}"
     fi
 }
-
-# ============================================================================
-# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH (APENAS SYSTEMD-BOOT)
-# ============================================================================
 
 setup_secureboot_arch() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
@@ -207,17 +196,14 @@ setup_secureboot_arch() {
     echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
     
     if ! command -v sbctl &>/dev/null; then
-        echo "${YELLOW}Instalando sbctl...${NC}"
         sudo pacman -S --noconfirm sbctl
     else
         echo "${GREEN}✓ sbctl já está instalado${NC}"
     fi
     
-    echo "${YELLOW}Status sbctl:${NC}"
     sudo sbctl status
     
     if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
-        echo "${YELLOW}Criando chaves Secure Boot...${NC}"
         sudo sbctl create-keys
     else
         echo "${GREEN}✓ Chaves Secure Boot já existem${NC}"
@@ -226,7 +212,6 @@ setup_secureboot_arch() {
     if sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
         echo "${GREEN}✓ Chaves já estão enrolladas${NC}"
     else
-        echo "${YELLOW}Enrolando chaves...${NC}"
         if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
             echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft${NC}"
             sudo sbctl enroll-keys --microsoft
@@ -236,13 +221,8 @@ setup_secureboot_arch() {
         fi
     fi
     
-    echo "${YELLOW}Verificando arquivos para assinar...${NC}"
     sudo sbctl verify
     
-    echo "${YELLOW}Assinando arquivos...${NC}"
-    
-    # Kernel
-    echo "  Assinando kernels..."
     if [ -f /boot/vmlinuz-linux ]; then
         sudo sbctl sign -s /boot/vmlinuz-linux || true
     fi
@@ -250,14 +230,11 @@ setup_secureboot_arch() {
         sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
     fi
     
-    # UKI
-    echo "  Assinando UKI..."
     if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
         sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
     elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
         sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
     else
-        echo "    ⚠ UKI não encontrado. Gerando..."
         sudo mkdir -p /boot/EFI/Linux
         sudo mkinitcpio -P
         if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
@@ -265,7 +242,6 @@ setup_secureboot_arch() {
         fi
     fi
     
-    # systemd-boot
     local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
     if [ -z "$esp_path" ]; then
         if [ -d /boot/EFI/systemd ]; then
@@ -277,7 +253,6 @@ setup_secureboot_arch() {
         fi
     fi
     
-    echo "  Assinando systemd-boot..."
     if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ]; then
         sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
     fi
@@ -288,13 +263,10 @@ setup_secureboot_arch() {
         sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
     fi
     
-    # fwupd
-    echo "  Assinando fwupd..."
     if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
         sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
     fi
     
-    echo "${YELLOW}Verificando assinaturas finais...${NC}"
     sudo sbctl verify
     
     echo ""
@@ -309,35 +281,27 @@ setup_secureboot() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" != "arch" ]]; then
-        echo "${YELLOW}Secure Boot é suportado apenas no Arch Linux. Pulando...${NC}"
         return
     fi
     
     local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
     
     if [[ "$secureboot_support" == "unsupported" ]]; then
-        echo "${YELLOW}Secure Boot não é suportado neste sistema (modo BIOS ou sem UEFI). Pulando...${NC}"
         return
     fi
     
     setup_secureboot_arch
 }
 
-# ============================================================================
-# CONFIGURAÇÃO DE BOOT TIMEOUT
-# ============================================================================
-
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
     if [[ "$bootloader" != "systemd-boot" ]]; then
-        echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
         return 1
     fi
     
     local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
     
-    # Tenta encontrar o ESP se não foi detectado
     if [ -z "$esp_path" ]; then
         if [ -d /boot/loader ]; then
             esp_path="/boot"
@@ -348,13 +312,11 @@ setup_boot_timeout() {
         elif [ -d /boot/efi/EFI/systemd ]; then
             esp_path="/boot/efi"
         else
-            # Tenta descobrir pela montagem
             if mount | grep -q "/boot/efi "; then
                 esp_path="/boot/efi"
             elif mount | grep -q "/boot "; then
                 esp_path="/boot"
             else
-                echo "${RED}⚠ Não foi possível encontrar o diretório do systemd-boot${NC}"
                 return 1
             fi
         fi
@@ -368,25 +330,18 @@ setup_boot_timeout() {
     elif [ -f "/boot/efi/loader/loader.conf" ]; then
         loader_conf="/boot/efi/loader/loader.conf"
     else
-        # Cria o diretório e arquivo
         if [ -d "${esp_path}/loader" ]; then
             loader_conf="${esp_path}/loader/loader.conf"
         elif [ -d "/boot/loader" ]; then
             loader_conf="/boot/loader/loader.conf"
         else
-            # Cria o diretório loader
             sudo mkdir -p "${esp_path}/loader"
             loader_conf="${esp_path}/loader/loader.conf"
         fi
     fi
     
     echo "timeout 2" | sudo tee "$loader_conf"
-    echo "${GREEN}✓ timeout configurado para 2 segundos em ${loader_conf}${NC}"
 }
-
-# ============================================================================
-# FUNÇÕES DE SELEÇÃO INTERATIVAS
-# ============================================================================
 
 select_desktop() {
     clear_screen
@@ -577,10 +532,6 @@ select_extras() {
     sleep 1
 }
 
-# ============================================================================
-# CONFIGURAÇÃO DE REPOSITÓRIOS
-# ============================================================================
-
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -616,10 +567,6 @@ setup_sources() {
     esac
 }
 
-# ============================================================================
-# INSTALAÇÃO DE PACOTES BASE
-# ============================================================================
-
 install_base() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -632,10 +579,6 @@ install_base() {
             ;;
     esac
 }
-
-# ============================================================================
-# CONFIGURAÇÃO DE SEGURANÇA
-# ============================================================================
 
 setup_security() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -661,10 +604,6 @@ setup_security() {
     esac
 }
 
-# =============================================================================
-# GERENCIADORES DE PACOTES (FLATPAK, ETC)
-# =============================================================================
-
 setup_package_managers() {
     local desktop=$(cat "$STATE_DIR/desktop")
     local distro=$(cat "$STATE_DIR/distro")
@@ -687,10 +626,6 @@ setup_package_managers() {
             ;;
     esac
 }
-
-# =============================================================================
-# INSTALAÇÃO DE DESKTOP
-# =============================================================================
 
 install_desktop() {
     local desktop=$(cat "$STATE_DIR/desktop")
@@ -740,10 +675,6 @@ install_desktop() {
             ;;
     esac
 }
-
-# =============================================================================
-# INSTALAÇÃO DE APLICATIVOS
-# =============================================================================
 
 install_produtividade() {
     local prod=$(cat "$STATE_DIR/produtividade")
@@ -874,10 +805,6 @@ install_extras() {
     done
 }
 
-# =============================================================================
-# CONFIGURAÇÕES ESPECÍFICAS DO DEBIAN
-# =============================================================================
-
 setup_network() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -925,10 +852,6 @@ setup_btrfs_compression() {
         fi
     fi
 }
-
-# =============================================================================
-# DRIVERS
-# =============================================================================
 
 import_mok_key() {
     if ! command -v mokutil &>/dev/null; then
@@ -1033,10 +956,6 @@ install_cpu_microcode() {
     esac
 }
 
-# =============================================================================
-# CONFIGURAÇÕES DE PERFORMANCE
-# =============================================================================
-
 setup_performance_vars() {
     sudo mkdir -p /etc/environment.d
     sudo tee /etc/environment.d/performance.conf > /dev/null <<EOF
@@ -1044,10 +963,6 @@ MESA_SHADER_CACHE_MAX_SIZE=12G
 __GL_SHADER_DISK_CACHE_SIZE=12000000000
 EOF
 }
-
-# =============================================================================
-# LIMPEZA DE PACOTES INDESEJADOS
-# =============================================================================
 
 remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -1057,10 +972,6 @@ remove_packages() {
         sudo apt autoremove -y
     fi
 }
-
-# =============================================================================
-# REINICIALIZAÇÃO
-# =============================================================================
 
 ask_reboot() {
     echo ""
@@ -1073,18 +984,11 @@ ask_reboot() {
     fi
 }
 
-# =============================================================================
-# FUNÇÃO PRINCIPAL
-# =============================================================================
-
 main() {
     detect_distro
     detect_gpu
     detect_cpu
-    
-    # Detecta marca da placa-mãe para Secure Boot
     detect_motherboard_brand
-    
     detect_bootloader
     detect_secureboot_support
     
