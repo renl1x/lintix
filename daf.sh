@@ -596,8 +596,6 @@ setup_security() {
             sudo systemctl enable ufw
             sudo systemctl start ufw
             sudo apt install -y fwupd
-            sudo systemctl enable fwupd
-            sudo systemctl start fwupd
             ;;
             
         arch)
