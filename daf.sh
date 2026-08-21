@@ -109,15 +109,33 @@ detect_motherboard_brand() {
 
 detect_bootloader() {
     local bootloader=""
+    local esp_path=""
     
-    # Verifica systemd-boot em vários locais possíveis
-    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/efi/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ] || [ -f /boot/efi/loader/loader.conf ]; then
-        bootloader="systemd-boot"
-    else
-        # Verifica se bootctl reconhece systemd-boot
-        if command -v bootctl &>/dev/null; then
-            if sudo bootctl status 2>/dev/null | grep -q "systemd-boot"; then
-                bootloader="systemd-boot"
+    # Encontra a partição ESP
+    if mount | grep -q "/boot/efi "; then
+        esp_path="/boot/efi"
+    elif mount | grep -q "/boot "; then
+        esp_path="/boot"
+    elif [ -d /boot/EFI ]; then
+        esp_path="/boot"
+    elif [ -d /boot/efi/EFI ]; then
+        esp_path="/boot/efi"
+    fi
+    
+    if [ -n "$esp_path" ]; then
+        if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ] || [ -f "${esp_path}/loader/loader.conf" ] || [ -f "/boot/loader/loader.conf" ]; then
+            bootloader="systemd-boot"
+        fi
+    fi
+    
+    # Fallback: verifica com bootctl
+    if [ -z "$bootloader" ] && command -v bootctl &>/dev/null; then
+        if sudo bootctl status 2>/dev/null | grep -q "systemd-boot"; then
+            bootloader="systemd-boot"
+            if [ -f "/boot/loader/loader.conf" ]; then
+                esp_path="/boot"
+            elif [ -f "/boot/efi/loader/loader.conf" ]; then
+                esp_path="/boot/efi"
             fi
         fi
     fi
@@ -135,6 +153,7 @@ detect_bootloader() {
     fi
     
     echo "$bootloader" > "$STATE_DIR/bootloader"
+    [ -n "$esp_path" ] && echo "$esp_path" > "$STATE_DIR/esp_path"
 }
 
 detect_secureboot_support() {
@@ -247,18 +266,26 @@ setup_secureboot_arch() {
     fi
     
     # systemd-boot
-    echo "  Assinando systemd-boot..."
-    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
+    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+    if [ -z "$esp_path" ]; then
+        if [ -d /boot/EFI/systemd ]; then
+            esp_path="/boot"
+        elif [ -d /boot/efi/EFI/systemd ]; then
+            esp_path="/boot/efi"
+        else
+            esp_path="/boot"
+        fi
     fi
-    if [ -f /boot/efi/EFI/systemd/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s /boot/efi/EFI/systemd/systemd-bootx64.efi || true
+    
+    echo "  Assinando systemd-boot..."
+    if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ]; then
+        sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
     fi
     if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
         sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
     fi
-    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
+    if [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ]; then
+        sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
     fi
     
     # fwupd
@@ -303,52 +330,58 @@ setup_secureboot() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
-    case "$bootloader" in
-        "systemd-boot")
-            # Tenta encontrar o loader.conf
-            local loader_conf=""
-            if [ -f /boot/loader/loader.conf ]; then
-                loader_conf="/boot/loader/loader.conf"
-            elif [ -f /boot/efi/loader/loader.conf ]; then
-                loader_conf="/boot/efi/loader/loader.conf"
-            elif [ -f /boot/EFI/systemd/loader.conf ]; then
-                loader_conf="/boot/EFI/systemd/loader.conf"
-            elif [ -f /boot/efi/EFI/systemd/loader.conf ]; then
-                loader_conf="/boot/efi/EFI/systemd/loader.conf"
+    if [[ "$bootloader" != "systemd-boot" ]]; then
+        echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
+        return 1
+    fi
+    
+    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+    
+    # Tenta encontrar o ESP se não foi detectado
+    if [ -z "$esp_path" ]; then
+        if [ -d /boot/loader ]; then
+            esp_path="/boot"
+        elif [ -d /boot/efi/loader ]; then
+            esp_path="/boot/efi"
+        elif [ -d /boot/EFI/systemd ]; then
+            esp_path="/boot"
+        elif [ -d /boot/efi/EFI/systemd ]; then
+            esp_path="/boot/efi"
+        else
+            # Tenta descobrir pela montagem
+            if mount | grep -q "/boot/efi "; then
+                esp_path="/boot/efi"
+            elif mount | grep -q "/boot "; then
+                esp_path="/boot"
             else
-                echo "${YELLOW}⚠ Arquivo loader.conf não encontrado. Criando...${NC}"
-                if [ -d /boot/loader ]; then
-                    loader_conf="/boot/loader/loader.conf"
-                elif [ -d /boot/efi/loader ]; then
-                    loader_conf="/boot/efi/loader/loader.conf"
-                elif [ -d /boot/EFI/systemd ]; then
-                    loader_conf="/boot/EFI/systemd/loader.conf"
-                elif [ -d /boot/efi/EFI/systemd ]; then
-                    loader_conf="/boot/efi/EFI/systemd/loader.conf"
-                else
-                    echo "${RED}⚠ Não foi possível encontrar o diretório do systemd-boot${NC}"
-                    return 1
-                fi
+                echo "${RED}⚠ Não foi possível encontrar o diretório do systemd-boot${NC}"
+                return 1
             fi
-            
-            if [ -f "$loader_conf" ]; then
-                if grep -q "^timeout" "$loader_conf"; then
-                    sudo sed -i 's/^timeout.*/timeout 2/' "$loader_conf"
-                else
-                    echo "timeout 2" | sudo tee -a "$loader_conf"
-                fi
-                echo "${GREEN}✓ timeout configurado para 2 segundos em ${loader_conf}${NC}"
-            else
-                echo "timeout 2" | sudo tee "$loader_conf"
-                echo "${GREEN}✓ Arquivo ${loader_conf} criado com timeout 2 segundos${NC}"
-            fi
-            ;;
-            
-        *)
-            echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
-            return 1
-            ;;
-    esac
+        fi
+    fi
+    
+    local loader_conf=""
+    if [ -f "${esp_path}/loader/loader.conf" ]; then
+        loader_conf="${esp_path}/loader/loader.conf"
+    elif [ -f "/boot/loader/loader.conf" ]; then
+        loader_conf="/boot/loader/loader.conf"
+    elif [ -f "/boot/efi/loader/loader.conf" ]; then
+        loader_conf="/boot/efi/loader/loader.conf"
+    else
+        # Cria o diretório e arquivo
+        if [ -d "${esp_path}/loader" ]; then
+            loader_conf="${esp_path}/loader/loader.conf"
+        elif [ -d "/boot/loader" ]; then
+            loader_conf="/boot/loader/loader.conf"
+        else
+            # Cria o diretório loader
+            sudo mkdir -p "${esp_path}/loader"
+            loader_conf="${esp_path}/loader/loader.conf"
+        fi
+    fi
+    
+    echo "timeout 2" | sudo tee "$loader_conf"
+    echo "${GREEN}✓ timeout configurado para 2 segundos em ${loader_conf}${NC}"
 }
 
 # ============================================================================
