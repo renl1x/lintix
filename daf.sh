@@ -95,8 +95,6 @@ detect_motherboard_brand() {
         fi
     fi
     
-    echo "${GREEN}Marca da placa-mãe detectada: ${brand}${NC}"
-    
     case "$brand" in
         *"ASUS"*|*"Asus"*) echo "asus" ;;
         *"Gigabyte"*|*"GIGABYTE"*) echo "gigabyte" ;;
@@ -111,35 +109,29 @@ detect_motherboard_brand() {
 
 detect_bootloader() {
     local bootloader=""
-    local esp_paths=("/boot" "/efi" "/boot/efi")
     
-    for esp in "${esp_paths[@]}"; do
-        if [ -d "$esp/EFI/systemd" ] || [ -f "$esp/EFI/systemd/systemd-bootx64.efi" ] || [ -f "$esp/loader/loader.conf" ] || [ -d "$esp/loader" ]; then
-            bootloader="systemd-boot"
-            echo "${GREEN}✓ ESP encontrado em: ${esp}${NC}"
-            break
-        fi
-    done
-    
-    # Se não encontrou, tenta verificar com bootctl
-    if [ -z "$bootloader" ] && command -v bootctl &>/dev/null; then
-        if bootctl status 2>/dev/null | grep -qi "systemd-boot"; then
-            bootloader="systemd-boot"
-            echo "${GREEN}✓ systemd-boot detectado via bootctl${NC}"
-        fi
-    fi
-    
-    # Se ainda não encontrou, verifica se tem arquivos do systemd-boot em qualquer lugar
-    if [ -z "$bootloader" ]; then
-        if find /boot /efi /boot/efi -name "systemd-bootx64.efi" 2>/dev/null | grep -q .; then
-            bootloader="systemd-boot"
-            echo "${GREEN}✓ systemd-boot encontrado via find${NC}"
+    # Verifica systemd-boot em vários locais possíveis
+    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/efi/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ] || [ -f /boot/efi/loader/loader.conf ]; then
+        bootloader="systemd-boot"
+    else
+        # Verifica se bootctl reconhece systemd-boot
+        if command -v bootctl &>/dev/null; then
+            if sudo bootctl status 2>/dev/null | grep -q "systemd-boot"; then
+                bootloader="systemd-boot"
+            fi
         fi
     fi
     
     if [ -z "$bootloader" ]; then
-        bootloader="none"
-        echo "${YELLOW}⚠ Nenhum bootloader detectado${NC}"
+        if [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+            bootloader="limine"
+        elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
+            bootloader="grub"
+        elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
+            bootloader="uki"
+        else
+            bootloader="none"
+        fi
     fi
     
     echo "$bootloader" > "$STATE_DIR/bootloader"
@@ -187,9 +179,7 @@ setup_secureboot_arch() {
     
     if [[ "$secureboot_state" == "enabled" ]]; then
         echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
-        if command -v sbctl &>/dev/null; then
-            sudo sbctl status
-        fi
+        sudo sbctl status
         return 0
     fi
     
@@ -258,16 +248,17 @@ setup_secureboot_arch() {
     
     # systemd-boot
     echo "  Assinando systemd-boot..."
-    for esp in "/boot" "/efi" "/boot/efi"; do
-        if [ -f "$esp/EFI/systemd/systemd-bootx64.efi" ]; then
-            sudo sbctl sign -s "$esp/EFI/systemd/systemd-bootx64.efi" || true
-        fi
-        if [ -f "$esp/EFI/BOOT/BOOTX64.EFI" ]; then
-            sudo sbctl sign -s "$esp/EFI/BOOT/BOOTX64.EFI" || true
-        fi
-    done
+    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
+    fi
+    if [ -f /boot/efi/EFI/systemd/systemd-bootx64.efi ]; then
+        sudo sbctl sign -s /boot/efi/EFI/systemd/systemd-bootx64.efi || true
+    fi
     if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
         sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+    fi
+    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
     fi
     
     # fwupd
@@ -312,48 +303,49 @@ setup_secureboot() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
-    echo "${YELLOW}Configurando timeout para 2 segundos...${NC}"
-    
     case "$bootloader" in
         "systemd-boot")
+            # Tenta encontrar o loader.conf
             local loader_conf=""
-            
-            # Procura o arquivo loader.conf em todos os locais possíveis
-            for esp in "/boot" "/efi" "/boot/efi"; do
-                if [ -f "$esp/loader/loader.conf" ]; then
-                    loader_conf="$esp/loader/loader.conf"
-                    break
+            if [ -f /boot/loader/loader.conf ]; then
+                loader_conf="/boot/loader/loader.conf"
+            elif [ -f /boot/efi/loader/loader.conf ]; then
+                loader_conf="/boot/efi/loader/loader.conf"
+            elif [ -f /boot/EFI/systemd/loader.conf ]; then
+                loader_conf="/boot/EFI/systemd/loader.conf"
+            elif [ -f /boot/efi/EFI/systemd/loader.conf ]; then
+                loader_conf="/boot/efi/EFI/systemd/loader.conf"
+            else
+                echo "${YELLOW}⚠ Arquivo loader.conf não encontrado. Criando...${NC}"
+                if [ -d /boot/loader ]; then
+                    loader_conf="/boot/loader/loader.conf"
+                elif [ -d /boot/efi/loader ]; then
+                    loader_conf="/boot/efi/loader/loader.conf"
+                elif [ -d /boot/EFI/systemd ]; then
+                    loader_conf="/boot/EFI/systemd/loader.conf"
+                elif [ -d /boot/efi/EFI/systemd ]; then
+                    loader_conf="/boot/efi/EFI/systemd/loader.conf"
+                else
+                    echo "${RED}⚠ Não foi possível encontrar o diretório do systemd-boot${NC}"
+                    return 1
                 fi
-            done
+            fi
             
-            if [ -n "$loader_conf" ]; then
-                echo "${YELLOW}Arquivo encontrado: ${loader_conf}${NC}"
+            if [ -f "$loader_conf" ]; then
                 if grep -q "^timeout" "$loader_conf"; then
                     sudo sed -i 's/^timeout.*/timeout 2/' "$loader_conf"
                 else
                     echo "timeout 2" | sudo tee -a "$loader_conf"
                 fi
-                echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
+                echo "${GREEN}✓ timeout configurado para 2 segundos em ${loader_conf}${NC}"
             else
-                echo "${YELLOW}⚠ Arquivo loader.conf não encontrado. Criando...${NC}"
-                # Tenta criar em /boot/loader/ ou /efi/loader/
-                if [ -d /boot/loader ] || [ -d /boot ]; then
-                    sudo mkdir -p /boot/loader
-                    echo "timeout 2" | sudo tee /boot/loader/loader.conf
-                    echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
-                elif [ -d /efi/loader ] || [ -d /efi ]; then
-                    sudo mkdir -p /efi/loader
-                    echo "timeout 2" | sudo tee /efi/loader/loader.conf
-                    echo "${GREEN}✓ systemd-boot configurado para 2 segundos${NC}"
-                else
-                    echo "${RED}⚠ Não foi possível encontrar ou criar loader.conf${NC}"
-                    return 1
-                fi
+                echo "timeout 2" | sudo tee "$loader_conf"
+                echo "${GREEN}✓ Arquivo ${loader_conf} criado com timeout 2 segundos${NC}"
             fi
             ;;
             
         *)
-            echo "${YELLOW}⚠ Bootloader não suportado ou não encontrado. Pulando configuração de timeout.${NC}"
+            echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
             return 1
             ;;
     esac
@@ -1058,8 +1050,7 @@ main() {
     detect_cpu
     
     # Detecta marca da placa-mãe para Secure Boot
-    motherboard_brand=$(detect_motherboard_brand)
-    echo "$motherboard_brand" > "$STATE_DIR/motherboard_brand"
+    detect_motherboard_brand
     
     detect_bootloader
     detect_secureboot_support
