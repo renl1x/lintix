@@ -172,123 +172,119 @@ detect_secureboot_support() {
     fi
 }
 
-setup_secureboot_arch() {
-    local bootloader=$(cat "$STATE_DIR/bootloader")
-    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
-    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
-    
-    if [[ "$bootloader" != "systemd-boot" ]]; then
-        echo "${YELLOW}⚠ Secure Boot só é suportado com systemd-boot. Bootloader atual: ${bootloader}${NC}"
-        echo "${YELLOW}Pulando configuração do Secure Boot...${NC}"
-        return 0
-    fi
-    
-    if [[ "$secureboot_state" == "enabled" ]]; then
-        echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
-        sudo sbctl status
-        return 0
-    fi
-    
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Configurando Secure Boot${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    
-    if ! command -v sbctl &>/dev/null; then
-        sudo pacman -S --noconfirm sbctl
-    else
-        echo "${GREEN}✓ sbctl já está instalado${NC}"
-    fi
-    
-    sudo sbctl status
-    
-    if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
-        sudo sbctl create-keys
-    else
-        echo "${GREEN}✓ Chaves Secure Boot já existem${NC}"
-    fi
-    
-    if sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
-        echo "${GREEN}✓ Chaves já estão enrolladas${NC}"
-    else
-        if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
-            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft${NC}"
-            sudo sbctl enroll-keys --microsoft
-        else
-            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
-            sudo sbctl enroll-keys --microsoft --firmware-builtin
-        fi
-    fi
-    
-    sudo sbctl verify
-    
-    if [ -f /boot/vmlinuz-linux ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux || true
-    fi
-    if [ -f /boot/vmlinuz-linux-lts ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
-    fi
-    
-    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-    elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
-    else
-        sudo mkdir -p /boot/EFI/Linux
-        sudo mkinitcpio -P
-        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-        fi
-    fi
-    
-    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-    if [ -z "$esp_path" ]; then
-        if [ -d /boot/EFI/systemd ]; then
-            esp_path="/boot"
-        elif [ -d /boot/efi/EFI/systemd ]; then
-            esp_path="/boot/efi"
-        else
-            esp_path="/boot"
-        fi
-    fi
-    
-    if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ]; then
-        sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
-    fi
-    if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
-    fi
-    if [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ]; then
-        sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
-    fi
-    
-    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
-    fi
-    
-    sudo sbctl verify
-    
-    echo ""
-    echo "${GREEN}✓ Secure Boot configurado!${NC}"
-    echo "${YELLOW}Recomenda-se:${NC}"
-    echo "  1. Reiniciar o sistema: sudo reboot"
-    echo "  2. Entrar na BIOS/UEFI e ativar o Secure Boot"
-    echo "  3. Verificar com: sbctl status"
-}
-
 setup_secureboot() {
     local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" != "arch" ]]; then
-        return
-    fi
-    
     local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
     
     if [[ "$secureboot_support" == "unsupported" ]]; then
+        echo "${YELLOW}⚠ Sistema não suporta Secure Boot. Pulando...${NC}"
         return
     fi
     
-    setup_secureboot_arch
+    if [[ "$distro" == "debian" ]]; then
+        if ! command -v mokutil &>/dev/null; then
+            echo "${YELLOW}mokutil não instalado. Pulando...${NC}"
+            return
+        fi
+        
+        if ! sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
+            echo "${YELLOW}Secure Boot não está ativo. Pulando...${NC}"
+            return
+        fi
+        
+        if [ ! -f /var/lib/dkms/mok.pub ]; then
+            echo "${YELLOW}Arquivo /var/lib/dkms/mok.pub não encontrado. Pulando...${NC}"
+            return
+        fi
+        
+        if sudo mokutil --list-enrolled 2>/dev/null | grep -q "Debian Secure Boot"; then
+            echo "${GREEN}✓ Chave MOK já está enrollada${NC}"
+            return
+        fi
+        
+        echo "${YELLOW}Importando chave MOK...${NC}"
+        echo "${YELLOW}Digite uma senha (8-16 caracteres):${NC}"
+        sudo mokutil --import /var/lib/dkms/mok.pub
+        echo "${GREEN}✓ Chave MOK importada!${NC}"
+        echo "${YELLOW}Reinicie o sistema para concluir o enrollment.${NC}"
+        
+    elif [[ "$distro" == "arch" ]]; then
+        local bootloader=$(cat "$STATE_DIR/bootloader")
+        local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
+        local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+        
+        if [[ "$bootloader" != "systemd-boot" ]]; then
+            echo "${YELLOW}⚠ Secure Boot só é suportado com systemd-boot. Bootloader atual: ${bootloader}${NC}"
+            echo "${YELLOW}Pulando configuração...${NC}"
+            return 0
+        fi
+        
+        if [[ "$secureboot_state" == "enabled" ]]; then
+            echo "${GREEN}✓ Secure Boot já está ativo${NC}"
+            sudo sbctl status
+            return 0
+        fi
+        
+        echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+        echo "${GREEN}► Configurando Secure Boot${NC}"
+        echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+        
+        if ! command -v sbctl &>/dev/null; then
+            sudo pacman -S --noconfirm sbctl
+        fi
+        
+        sudo sbctl status
+        
+        if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
+            sudo sbctl create-keys
+        fi
+        
+        if ! sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
+            if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
+                echo "${YELLOW}⚠ Placa-mãe ${motherboard_brand}. Usando apenas --microsoft${NC}"
+                sudo sbctl enroll-keys --microsoft
+            else
+                echo "${YELLOW}⚠ Placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
+                sudo sbctl enroll-keys --microsoft --firmware-builtin
+            fi
+        fi
+        
+        sudo sbctl verify
+        
+        if [ -f /boot/vmlinuz-linux ]; then
+            sudo sbctl sign -s /boot/vmlinuz-linux || true
+        fi
+        if [ -f /boot/vmlinuz-linux-lts ]; then
+            sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
+        fi
+        
+        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+        elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
+        else
+            sudo mkdir -p /boot/EFI/Linux
+            sudo mkinitcpio -P
+            [ -f /boot/EFI/Linux/arch-linux.efi ] && sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+        fi
+        
+        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+        [ -z "$esp_path" ] && esp_path="/boot"
+        
+        [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ] && sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
+        [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+        [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ] && sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
+        [ -f /usr/lib/fwupd/efi/fwupdx64.efi ] && sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
+        
+        sudo sbctl verify
+        
+        echo ""
+        echo "${GREEN}✓ Secure Boot configurado!${NC}"
+        echo "${YELLOW}Recomenda-se:${NC}"
+        echo "  1. Reiniciar: sudo reboot"
+        echo "  2. Ativar Secure Boot na BIOS/UEFI"
+        echo "  3. Verificar com: sbctl status"
+    fi
 }
 
 setup_boot_timeout() {
@@ -864,28 +860,6 @@ setup_btrfs_compression() {
     fi
 }
 
-import_mok_key() {
-    if ! command -v mokutil &>/dev/null; then
-        return
-    fi
-    
-    if ! sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
-        return
-    fi
-    
-    if [ ! -f /var/lib/dkms/mok.pub ]; then
-        return
-    fi
-    
-    if sudo mokutil --list-enrolled 2>/dev/null | grep -q "Debian Secure Boot"; then
-        return
-    fi
-    
-    echo "${YELLOW}Digite uma senha (8-16 caracteres) para o Secure Boot:${NC}"
-    sudo mokutil --import /var/lib/dkms/mok.pub
-    echo "${YELLOW}Reinicie o sistema para concluir o enrollment.${NC}"
-}
-
 install_nvidia_debian() {
     if [ -f /etc/os-release ]; then
         source /etc/os-release
@@ -901,7 +875,7 @@ install_nvidia_debian() {
         sudo apt -y install nvidia-open
         rm -f cuda-keyring_1.1-1_all.deb
         
-        import_mok_key
+        setup_secureboot
     else
         return 1
     fi
