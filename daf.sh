@@ -78,74 +78,70 @@ detect_cpu() {
     fi
 }
 
-detect_motherboard_brand() {
-    local brand=""
-    
-    if [ -f /sys/class/dmi/id/board_vendor ]; then
-        brand=$(cat /sys/class/dmi/id/board_vendor 2>/dev/null)
-    fi
-    
-    if [ -z "$brand" ] || [ "$brand" == "Unknown" ] || [ "$brand" == "To be filled by O.E.M." ]; then
-        if [ -f /sys/class/dmi/id/sys_vendor ]; then
-            brand=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)
-        fi
-    fi
-    
-    case "$brand" in
-        *"ASUS"*|*"Asus"*) echo "asus" ;;
-        *"Gigabyte"*|*"GIGABYTE"*) echo "gigabyte" ;;
-        *"MSI"*|*"Micro-Star"*) echo "msi" ;;
-        *"Acer"*) echo "acer" ;;
-        *"Dell"*) echo "dell" ;;
-        *"HP"*|*"Hewlett-Packard"*) echo "hp" ;;
-        *"Lenovo"*) echo "lenovo" ;;
-        *) echo "gigabyte" ;;
-    esac
-}
-
 detect_bootloader() {
     local bootloader=""
-    local esp_path=""
     
-    if mount | grep -q "/boot/efi "; then
-        esp_path="/boot/efi"
-    elif mount | grep -q "/boot "; then
-        esp_path="/boot"
-    elif [ -d /boot/EFI ]; then
-        esp_path="/boot"
-    elif [ -d /boot/efi/EFI ]; then
-        esp_path="/boot/efi"
-    fi
-    
-    if [ -n "$esp_path" ]; then
-        if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ] || [ -f "${esp_path}/loader/loader.conf" ] || [ -f "/boot/loader/loader.conf" ]; then
-            bootloader="systemd-boot"
-        fi
-    fi
-    
-    if [ -z "$bootloader" ] && command -v bootctl &>/dev/null; then
-        if sudo bootctl status 2>/dev/null | grep -q "systemd-boot"; then
-            bootloader="systemd-boot"
-            if [ -f "/boot/loader/loader.conf" ]; then
-                esp_path="/boot"
-            elif [ -f "/boot/efi/loader/loader.conf" ]; then
-                esp_path="/boot/efi"
-            fi
-        fi
-    fi
-    
-    if [ -z "$bootloader" ]; then
-        if [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
-            bootloader="grub"
-        elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
-            bootloader="uki"
-        else
-            bootloader="none"
-        fi
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+        bootloader="systemd-boot"
+    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+        bootloader="limine"
+    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ]; then
+        bootloader="grub"
     fi
     
     echo "$bootloader" > "$STATE_DIR/bootloader"
-    [ -n "$esp_path" ] && echo "$esp_path" > "$STATE_DIR/esp_path"
+}
+
+setup_boot_timeout() {
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    
+    case "$bootloader" in
+        "systemd-boot")
+            if [ -d /boot/EFI/systemd ]; then
+                local loader_conf="/boot/EFI/systemd/loader.conf"
+            elif [ -d /boot/loader ]; then
+                local loader_conf="/boot/loader/loader.conf"
+            else
+                return 1
+            fi
+            
+            if [ -f "$loader_conf" ]; then
+                if grep -q "^timeout" "$loader_conf"; then
+                    sudo sed -i 's/^timeout.*/timeout 2/' "$loader_conf"
+                else
+                    echo "timeout 2" | sudo tee -a "$loader_conf"
+                fi
+            else
+                echo "timeout 2" | sudo tee "$loader_conf"
+            fi
+            ;;
+            
+        "limine")
+            if [ -f /boot/limine.conf ]; then
+                if grep -q "^TIMEOUT" /boot/limine.conf; then
+                    sudo sed -i 's/^TIMEOUT=.*/TIMEOUT=2/' /boot/limine.conf
+                else
+                    echo "TIMEOUT=2" | sudo tee -a /boot/limine.conf
+                fi
+            fi
+            ;;
+            
+        "grub")
+            if [ -f /etc/default/grub ]; then
+                if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
+                fi
+                if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
+                fi
+                sudo update-grub
+            fi
+            ;;
+    esac
 }
 
 detect_secureboot_support() {
@@ -160,119 +156,73 @@ detect_secureboot_support() {
     if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
         if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
             echo "enabled" > "$STATE_DIR/secureboot_state"
-            echo "${GREEN}✓ Secure Boot está ativo${NC}"
         else
             echo "disabled" > "$STATE_DIR/secureboot_state"
-            echo "${YELLOW}⚠ Secure Boot está desativado${NC}"
         fi
         echo "supported" > "$STATE_DIR/secureboot_support"
     else
         echo "unsupported" > "$STATE_DIR/secureboot_support"
-        echo "${YELLOW}⚠ Sistema em modo BIOS ou sem UEFI${NC}"
     fi
 }
 
 setup_secureboot_arch() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
-    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
     local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
     
-    if [[ "$bootloader" != "systemd-boot" ]]; then
-        echo "${YELLOW}⚠ Secure Boot só é suportado com systemd-boot. Bootloader atual: ${bootloader}${NC}"
-        echo "${YELLOW}Pulando configuração do Secure Boot...${NC}"
-        return 0
-    fi
-    
     if [[ "$secureboot_state" == "enabled" ]]; then
-        echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
-        sudo sbctl status
         return 0
     fi
     
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
-    echo "${GREEN}► Configurando Secure Boot${NC}"
-    echo "${CYAN}────────────────────────────────────────────────────────────────────${NC}"
+    sudo pacman -S --noconfirm sbctl
+    sudo sbctl create-keys
     
-    if ! command -v sbctl &>/dev/null; then
-        sudo pacman -S --noconfirm sbctl
+    if sudo sbctl enroll-keys --microsoft 2>&1 | grep -q "firmware-builtin"; then
+        sudo sbctl enroll-keys --microsoft
     else
-        echo "${GREEN}✓ sbctl já está instalado${NC}"
-    fi
-    
-    sudo sbctl status
-    
-    if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
-        sudo sbctl create-keys
-    else
-        echo "${GREEN}✓ Chaves Secure Boot já existem${NC}"
-    fi
-    
-    if sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
-        echo "${GREEN}✓ Chaves já estão enrolladas${NC}"
-    else
-        if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
-            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando apenas --microsoft${NC}"
-            sudo sbctl enroll-keys --microsoft
-        else
-            echo "${YELLOW}⚠ Detectada placa-mãe ${motherboard_brand}. Usando --microsoft --firmware-builtin${NC}"
-            sudo sbctl enroll-keys --microsoft --firmware-builtin
-        fi
+        sudo sbctl enroll-keys --microsoft --firmware-builtin
     fi
     
     sudo sbctl verify
+    sudo sbctl-batch-sign || sudo sbctl sign -s /boot/vmlinuz-linux || true
     
-    if [ -f /boot/vmlinuz-linux ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux || true
-    fi
-    if [ -f /boot/vmlinuz-linux-lts ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
-    fi
-    
-    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-    elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
-    else
-        sudo mkdir -p /boot/EFI/Linux
-        sudo mkinitcpio -P
-        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-        fi
-    fi
-    
-    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-    if [ -z "$esp_path" ]; then
-        if [ -d /boot/EFI/systemd ]; then
-            esp_path="/boot"
-        elif [ -d /boot/efi/EFI/systemd ]; then
-            esp_path="/boot/efi"
-        else
-            esp_path="/boot"
-        fi
-    fi
-    
-    if [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ]; then
-        sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
-    fi
-    if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
-    fi
-    if [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ]; then
-        sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
-    fi
-    
-    if [ -f /usr/lib/fwupd/efi/fwupdx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
-    fi
+    case "$bootloader" in
+        "systemd-boot")
+            if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+                sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi
+            fi
+            ;;
+        "limine")
+            if command -v limine-enroll-config &>/dev/null; then
+                if [ -f /etc/default/limine ]; then
+                    sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+                else
+                    echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+                fi
+                
+                if [ -f /boot/limine.conf ]; then
+                    local splash_img=$(sudo cat /boot/limine.conf | grep "wallpaper:" | awk '{print $2}' | cut -d'#' -f1)
+                    if [ -n "$splash_img" ] && [ -f "$splash_img" ]; then
+                        local hash=$(sudo b2sum "$splash_img" | awk '{print $1}')
+                        sudo sed -i "s|wallpaper:.*|wallpaper: ${splash_img}#${hash}|" /boot/limine.conf
+                    fi
+                fi
+                
+                sudo limine-enroll-config
+                sudo limine-update
+            fi
+            ;;
+        "grub")
+            if command -v grub-install &>/dev/null; then
+                sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+            fi
+            ;;
+        *)
+            sudo sbctl sign -s /boot/vmlinuz-linux || true
+            ;;
+    esac
     
     sudo sbctl verify
-    
-    echo ""
-    echo "${GREEN}✓ Secure Boot configurado!${NC}"
-    echo "${YELLOW}Recomenda-se:${NC}"
-    echo "  1. Reiniciar o sistema: sudo reboot"
-    echo "  2. Entrar na BIOS/UEFI e ativar o Secure Boot"
-    echo "  3. Verificar com: sbctl status"
 }
 
 setup_secureboot() {
@@ -289,69 +239,6 @@ setup_secureboot() {
     fi
     
     setup_secureboot_arch
-}
-
-setup_boot_timeout() {
-    local bootloader=$(cat "$STATE_DIR/bootloader")
-    
-    if [[ "$bootloader" == "systemd-boot" ]]; then
-        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-        
-        if [ -z "$esp_path" ]; then
-            if [ -d /boot/loader ]; then
-                esp_path="/boot"
-            elif [ -d /boot/efi/loader ]; then
-                esp_path="/boot/efi"
-            elif [ -d /boot/EFI/systemd ]; then
-                esp_path="/boot"
-            elif [ -d /boot/efi/EFI/systemd ]; then
-                esp_path="/boot/efi"
-            else
-                if mount | grep -q "/boot/efi "; then
-                    esp_path="/boot/efi"
-                elif mount | grep -q "/boot "; then
-                    esp_path="/boot"
-                else
-                    return 1
-                fi
-            fi
-        fi
-        
-        local loader_conf=""
-        if [ -f "${esp_path}/loader/loader.conf" ]; then
-            loader_conf="${esp_path}/loader/loader.conf"
-        elif [ -f "/boot/loader/loader.conf" ]; then
-            loader_conf="/boot/loader/loader.conf"
-        elif [ -f "/boot/efi/loader/loader.conf" ]; then
-            loader_conf="/boot/efi/loader/loader.conf"
-        else
-            if [ -d "${esp_path}/loader" ]; then
-                loader_conf="${esp_path}/loader/loader.conf"
-            elif [ -d "/boot/loader" ]; then
-                loader_conf="/boot/loader/loader.conf"
-            else
-                sudo mkdir -p "${esp_path}/loader"
-                loader_conf="${esp_path}/loader/loader.conf"
-            fi
-        fi
-        
-        echo "timeout 2" | sudo tee "$loader_conf"
-        
-    elif [[ "$bootloader" == "grub" ]]; then
-        if [ -f /etc/default/grub ]; then
-            if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
-                sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
-            else
-                echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
-            fi
-            if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
-                sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
-            else
-                echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
-            fi
-            sudo update-grub
-        fi
-    fi
 }
 
 select_desktop() {
@@ -583,10 +470,10 @@ install_base() {
     
     case "$distro" in
         debian)
-            sudo apt install -y podman git nano gamemode fastfetch
+            sudo apt install -y podman git neovim gamemode fastfetch curl
             ;;
         arch)
-            sudo pacman -S --noconfirm podman git nano fastfetch gamemode
+            sudo pacman -S --noconfirm podman git neovim fastfetch gamemode curl
             ;;
     esac
 }
@@ -673,7 +560,7 @@ install_desktop() {
                     sudo systemctl enable plasmalogin
                     ;;
                 cosmic)
-                    sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk xdg-user-dirs
+                    sudo pacman -S --noconfirm cosmic-session cosmic-terminal cosmic-files cosmic-store cosmic-wallpapers xdg-desktop-portal-gtk
                     sudo systemctl enable cosmic-greeter
                     ;;
                 dank)
@@ -979,7 +866,7 @@ remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
     
     if [[ "$distro" == "debian" ]]; then
-        sudo apt remove -y vim-common
+        sudo apt remove -y nano wget vim-common
         sudo apt autoremove -y
     fi
 }
@@ -999,16 +886,13 @@ main() {
     detect_distro
     detect_gpu
     detect_cpu
-    detect_motherboard_brand
     detect_bootloader
     detect_secureboot_support
-    
     select_desktop
     select_produtividade
     select_multimidia
     select_games
     select_extras
-    
     setup_sources
     install_base
     setup_security
