@@ -110,55 +110,50 @@ detect_motherboard_brand() {
 detect_bootloader() {
     local bootloader=""
     
-    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ]; then
+    echo "${YELLOW}Detectando bootloader...${NC}"
+    
+    # systemd-boot - verifica várias possibilidades
+    if [ -d /boot/EFI/systemd ] || [ -f /boot/EFI/systemd/systemd-bootx64.efi ] || [ -f /boot/loader/loader.conf ] || [ -d /boot/loader ]; then
         bootloader="systemd-boot"
+        echo "${GREEN}✓ Bootloader detectado: systemd-boot${NC}"
+    elif [ -f /boot/limine.conf ] || [ -f /boot/EFI/LIMINE/limine.efi ]; then
+        bootloader="limine"
+        echo "${GREEN}✓ Bootloader detectado: limine${NC}"
+    elif [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
+        bootloader="grub"
+        echo "${GREEN}✓ Bootloader detectado: grub${NC}"
+    elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
+        bootloader="uki"
+        echo "${GREEN}✓ Bootloader detectado: uki${NC}"
     else
         bootloader="none"
+        echo "${YELLOW}⚠ Nenhum bootloader detectado${NC}"
     fi
     
     echo "$bootloader" > "$STATE_DIR/bootloader"
 }
 
 detect_secureboot_support() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    # Instala mokutil no Arch se necessário
-    if [ "$distro" == "arch" ]; then
-        if ! command -v mokutil &>/dev/null; then
-            echo "${YELLOW}Instalando mokutil para detectar Secure Boot...${NC}"
-            sudo pacman -S --noconfirm mokutil
-        fi
-    fi
-    
     if [ -d /sys/firmware/efi ] && command -v mokutil &>/dev/null; then
         if sudo mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"; then
             echo "enabled" > "$STATE_DIR/secureboot_state"
-            echo "${GREEN}✓ Secure Boot está ativo${NC}"
         else
             echo "disabled" > "$STATE_DIR/secureboot_state"
-            echo "${YELLOW}⚠ Secure Boot está desativado${NC}"
         fi
         echo "supported" > "$STATE_DIR/secureboot_support"
     else
         echo "unsupported" > "$STATE_DIR/secureboot_support"
-        echo "${YELLOW}⚠ Sistema em modo BIOS ou sem UEFI${NC}"
     fi
 }
 
 # ============================================================================
-# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH (APENAS SYSTEMD-BOOT)
+# CONFIGURAÇÃO DE SECURE BOOT PARA ARCH
 # ============================================================================
 
 setup_secureboot_arch() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
     local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
-    
-    if [[ "$bootloader" != "systemd-boot" ]]; then
-        echo "${YELLOW}⚠ Secure Boot só é suportado com systemd-boot. Bootloader atual: ${bootloader}${NC}"
-        echo "${YELLOW}Pulando configuração do Secure Boot...${NC}"
-        return 0
-    fi
     
     if [[ "$secureboot_state" == "enabled" ]]; then
         echo "${GREEN}✓ Secure Boot já está ativo no sistema${NC}"
@@ -230,15 +225,47 @@ setup_secureboot_arch() {
     fi
     
     # systemd-boot
-    echo "  Assinando systemd-boot..."
-    if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
+    if [[ "$bootloader" == "systemd-boot" ]] || [[ "$bootloader" == "uki" ]]; then
+        echo "  Assinando systemd-boot..."
+        if [ -f /boot/EFI/systemd/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi || true
+        fi
+        if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
+            sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+        fi
+        if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
+            sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
+        fi
     fi
-    if [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ]; then
-        sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+    
+    # Limine
+    if [[ "$bootloader" == "limine" ]]; then
+        echo "  Assinando Limine..."
+        if [ -f /boot/EFI/LIMINE/limine.efi ]; then
+            sudo sbctl sign -s /boot/EFI/LIMINE/limine.efi || true
+        fi
+        if command -v limine-enroll-config &>/dev/null; then
+            echo "  Configurando Limine para Secure Boot..."
+            if [ -f /etc/default/limine ]; then
+                sudo sed -i 's/^#ENABLE_ENROLL_LIMINE_CONFIG=.*/ENABLE_ENROLL_LIMINE_CONFIG=yes/' /etc/default/limine || \
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee -a /etc/default/limine
+            else
+                echo "ENABLE_ENROLL_LIMINE_CONFIG=yes" | sudo tee /etc/default/limine
+            fi
+            sudo limine-enroll-config
+            sudo limine-update
+        fi
     fi
-    if [ -f /boot/EFI/BOOT/BOOTX64.EFI ]; then
-        sudo sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI || true
+    
+    # GRUB
+    if [[ "$bootloader" == "grub" ]]; then
+        echo "  Assinando GRUB..."
+        if [ -f /boot/EFI/GRUB/grubx64.efi ]; then
+            sudo sbctl sign -s /boot/EFI/GRUB/grubx64.efi || true
+        fi
+        if command -v grub-install &>/dev/null; then
+            sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --modules="tpm" --disable-shim-lock || true
+        fi
     fi
     
     # fwupd
@@ -283,14 +310,20 @@ setup_secureboot() {
 setup_boot_timeout() {
     local bootloader=$(cat "$STATE_DIR/bootloader")
     
+    echo "${YELLOW}Configurando timeout para 2 segundos...${NC}"
+    
     case "$bootloader" in
-        "systemd-boot")
-            if [ -d /boot/EFI/systemd ]; then
+        "systemd-boot"|"uki")
+            echo "  Configurando systemd-boot..."
+            # Tenta os possíveis locais do loader.conf
+            if [ -f /boot/EFI/systemd/loader.conf ]; then
                 local loader_conf="/boot/EFI/systemd/loader.conf"
-            elif [ -d /boot/loader ]; then
+            elif [ -f /boot/loader/loader.conf ]; then
                 local loader_conf="/boot/loader/loader.conf"
             else
-                return 1
+                # Cria o diretório e arquivo se não existir
+                sudo mkdir -p /boot/loader
+                local loader_conf="/boot/loader/loader.conf"
             fi
             
             if [ -f "$loader_conf" ]; then
@@ -299,14 +332,48 @@ setup_boot_timeout() {
                 else
                     echo "timeout 2" | sudo tee -a "$loader_conf"
                 fi
+                echo "  ✓ systemd-boot configurado (timeout 2 segundos)"
             else
-                echo "timeout 2" | sudo tee "$loader_conf"
+                echo "  ⚠ Não foi possível criar $loader_conf"
+            fi
+            ;;
+            
+        "limine")
+            echo "  Configurando Limine..."
+            if [ -f /boot/limine.conf ]; then
+                if grep -q "^TIMEOUT" /boot/limine.conf; then
+                    sudo sed -i 's/^TIMEOUT=.*/TIMEOUT=2/' /boot/limine.conf
+                else
+                    echo "TIMEOUT=2" | sudo tee -a /boot/limine.conf
+                fi
+                echo "  ✓ Limine configurado (timeout 2 segundos)"
+            else
+                echo "  ⚠ /boot/limine.conf não encontrado"
+            fi
+            ;;
+            
+        "grub")
+            echo "  Configurando GRUB..."
+            if [ -f /etc/default/grub ]; then
+                if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
+                fi
+                if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
+                    sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
+                else
+                    echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
+                fi
+                sudo update-grub
+                echo "  ✓ GRUB configurado (timeout 2 segundos)"
+            else
+                echo "  ⚠ /etc/default/grub não encontrado"
             fi
             ;;
             
         *)
-            echo "${YELLOW}⚠ Bootloader não suportado para configuração de timeout.${NC}"
-            return 1
+            echo "  ⚠ Bootloader não suportado ou não detectado"
             ;;
     esac
 }
@@ -1008,10 +1075,7 @@ main() {
     detect_distro
     detect_gpu
     detect_cpu
-    
-    # Detecta marca da placa-mãe para Secure Boot
     detect_motherboard_brand
-    
     detect_bootloader
     detect_secureboot_support
     
