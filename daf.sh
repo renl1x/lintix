@@ -241,12 +241,12 @@ setup_secureboot_arch() {
         return 0
     fi
     
-    if ! sudo sbctl status 2>/dev/null | grep -q "Setup Mode.*Enabled"; then
-        return 0
-    fi
-    
     if ! command -v sbctl &>/dev/null; then
         sudo pacman -S --noconfirm sbctl
+    fi
+    
+    if ! sudo sbctl status 2>/dev/null | grep -q "Setup Mode.*Enabled"; then
+        return 0
     fi
     
     if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
@@ -331,7 +331,7 @@ setup_boot_timeout() {
             fi
         fi
         
-        echo "timeout 2" | sudo tee "$loader_conf"
+        echo "timeout 2" | sudo tee "$loader_conf" > /dev/null
         
     elif [[ "$bootloader" == "grub" ]]; then
         if [ -f /etc/default/grub ]; then
