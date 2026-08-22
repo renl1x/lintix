@@ -79,7 +79,7 @@ detect_cpu() {
 }
 
 detect_motherboard_brand() {
-    local brand=""
+    local brand="gigabyte"
     
     if [ -f /sys/class/dmi/id/board_vendor ]; then
         brand=$(cat /sys/class/dmi/id/board_vendor 2>/dev/null)
@@ -197,10 +197,8 @@ install_nvidia_with_mok() {
         debian_version=$(echo "$debian_version" | cut -d. -f1)
     fi
     
-    echo "${YELLOW}Instalando linux-headers-amd64...${NC}"
     sudo apt install -y linux-headers-amd64
     
-    echo "${YELLOW}Instalando driver NVIDIA para Debian ${debian_version}...${NC}"
     curl -LO https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
     sudo dpkg -i cuda-keyring_1.1-1_all.deb
     sudo apt update
@@ -594,19 +592,14 @@ setup_security() {
     
     case "$distro" in
         debian)
-            sudo apt install -y ufw
+            sudo apt install -y ufw fwupd
             sudo systemctl enable ufw
-            sudo systemctl start ufw
-            sudo apt install -y fwupd
             ;;
             
         arch)
-            sudo pacman -S --noconfirm apparmor
+            sudo pacman -S --noconfirm apparmor fwupd
             sudo systemctl enable apparmor
-            sudo systemctl start apparmor
-            sudo pacman -S --noconfirm fwupd
             sudo systemctl enable fwupd
-            sudo systemctl start fwupd
             ;;
     esac
 }
@@ -833,8 +826,6 @@ zram-size = ram * 0.25
 compression-algorithm = zstd
 swap-priority = 100
 EOF
-        sudo systemctl daemon-reload
-        sudo systemctl start systemd-zram-setup@zram0.service
     elif [[ "$distro" == "arch" ]]; then
         sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
 [zram0]
@@ -842,8 +833,6 @@ zram-size = ram * 0.25
 compression-algorithm = zstd
 swap-priority = 100
 EOF
-        sudo systemctl daemon-reload
-        sudo systemctl start systemd-zram-setup@zram0.service
     fi
 }
 
@@ -853,8 +842,7 @@ setup_btrfs_compression() {
     if [[ "$distro" == "debian" ]]; then
         if mount | grep -q "btrfs"; then
             sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
-            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
-            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
             sudo mount -o remount /
         fi
     fi
