@@ -92,14 +92,14 @@ detect_motherboard_brand() {
     fi
     
     case "$brand" in
-        *"ASUS"*|*"Asus"*) echo "asus" ;;
-        *"Gigabyte"*|*"GIGABYTE"*) echo "gigabyte" ;;
-        *"MSI"*|*"Micro-Star"*) echo "msi" ;;
-        *"Acer"*) echo "acer" ;;
-        *"Dell"*) echo "dell" ;;
-        *"HP"*|*"Hewlett-Packard"*) echo "hp" ;;
-        *"Lenovo"*) echo "lenovo" ;;
-        *) echo "gigabyte" ;;
+        *"ASUS"*|*"Asus"*) echo "asus" > "$STATE_DIR/motherboard_brand" ;;
+        *"Gigabyte"*|*"GIGABYTE"*) echo "gigabyte" > "$STATE_DIR/motherboard_brand" ;;
+        *"MSI"*|*"Micro-Star"*) echo "msi" > "$STATE_DIR/motherboard_brand" ;;
+        *"Acer"*) echo "acer" > "$STATE_DIR/motherboard_brand" ;;
+        *"Dell"*) echo "dell" > "$STATE_DIR/motherboard_brand" ;;
+        *"HP"*|*"Hewlett-Packard"*) echo "hp" > "$STATE_DIR/motherboard_brand" ;;
+        *"Lenovo"*) echo "lenovo" > "$STATE_DIR/motherboard_brand" ;;
+        *) echo "gigabyte" > "$STATE_DIR/motherboard_brand" ;;
     esac
 }
 
@@ -842,7 +842,8 @@ setup_btrfs_compression() {
     if [[ "$distro" == "debian" ]]; then
         if mount | grep -q "btrfs"; then
             sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
-            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
             sudo mount -o remount /
         fi
     fi
