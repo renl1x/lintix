@@ -44,6 +44,10 @@ show_option() {
     echo "  ${CYAN}$num${NC}) $desc"
 }
 
+# ============================================================================
+# DETECÇÃO
+# ============================================================================
+
 detect_distro() {
     if [ -f /etc/debian_version ]; then
         echo "debian" > "$STATE_DIR/distro"
@@ -137,8 +141,6 @@ detect_bootloader() {
     if [ -z "$bootloader" ]; then
         if [ -f /boot/grub/grub.cfg ] || [ -f /boot/EFI/GRUB/grubx64.efi ] || [ -f /etc/default/grub ]; then
             bootloader="grub"
-        elif [ -d /boot/EFI/Linux ] && [ "$(ls -A /boot/EFI/Linux/*.efi 2>/dev/null | head -1)" ]; then
-            bootloader="uki"
         else
             bootloader="none"
         fi
@@ -173,182 +175,9 @@ detect_secureboot_support() {
     fi
 }
 
-install_nvidia_with_mok() {
-    local debian_version=""
-    
-    if [ -f /etc/debian_version ]; then
-        debian_version=$(cat /etc/debian_version)
-    fi
-    
-    if [ -z "$debian_version" ]; then
-        return 1
-    fi
-    
-    if echo "$debian_version" | grep -qiE "testing|sid"; then
-        echo "${CYAN}Digite a versão do Debian para o driver NVIDIA (ex: 12, 11, 10):${NC}"
-        read -p "Versão: " user_version
-        
-        if [ -n "$user_version" ]; then
-            debian_version="$user_version"
-        else
-            return 1
-        fi
-    else
-        debian_version=$(echo "$debian_version" | cut -d. -f1)
-    fi
-    
-    sudo apt install -y linux-headers-amd64
-    
-    curl -LO https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
-    sudo dpkg -i cuda-keyring_1.1-1_all.deb
-    sudo apt update
-    sudo apt -y install nvidia-open
-    rm -f cuda-keyring_1.1-1_all.deb
-    
-    if ! command -v mokutil &>/dev/null; then
-        sudo apt install -y mokutil
-    fi
-    
-    if [ ! -f /var/lib/dkms/mok.pub ]; then
-        sudo dkms generate_mok
-    fi
-    
-    if [ -f /var/lib/dkms/mok.pub ]; then
-        echo "${YELLOW}Importando chave MOK para Secure Boot...${NC}"
-        echo "${YELLOW}Digite uma senha (8-16 caracteres) quando solicitado:${NC}"
-        sudo mokutil --import /var/lib/dkms/mok.pub
-        
-        echo "${GREEN}✓ Chave MOK importada com sucesso!${NC}"
-        echo "${YELLOW}⚠ IMPORTANTE:${NC}"
-        echo "${YELLOW}  1. Reinicie o sistema${NC}"
-        echo "${YELLOW}  2. Durante a reinicialização, siga as instruções na tela para confirmar a senha${NC}"
-        echo "${YELLOW}  3. Após confirmar, o driver NVIDIA será carregado corretamente${NC}"
-    else
-        echo "${RED}✗ Arquivo /var/lib/dkms/mok.pub não encontrado${NC}"
-    fi
-}
-
-setup_secureboot_arch() {
-    local bootloader=$(cat "$STATE_DIR/bootloader")
-    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
-    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
-    
-    if [[ "$bootloader" != "systemd-boot" ]]; then
-        return 0
-    fi
-    
-    if [[ "$secureboot_state" == "enabled" ]]; then
-        return 0
-    fi
-    
-    if ! command -v sbctl &>/dev/null; then
-        sudo pacman -S --noconfirm sbctl
-    fi
-    
-    if ! sudo sbctl status 2>/dev/null | grep -q "Setup Mode.*Enabled"; then
-        return 0
-    fi
-    
-    if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
-        sudo sbctl create-keys
-    fi
-    
-    if ! sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
-        if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
-            sudo sbctl enroll-keys --microsoft
-        else
-            sudo sbctl enroll-keys --microsoft --firmware-builtin
-        fi
-    fi
-    
-    if [ -f /boot/vmlinuz-linux ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux || true
-    fi
-    if [ -f /boot/vmlinuz-linux-lts ]; then
-        sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
-    fi
-    
-    if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-    elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
-        sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
-    else
-        sudo mkdir -p /boot/EFI/Linux
-        sudo mkinitcpio -P
-        [ -f /boot/EFI/Linux/arch-linux.efi ] && sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
-    fi
-    
-    local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-    [ -z "$esp_path" ] && esp_path="/boot"
-    
-    [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ] && sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
-    [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
-    [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ] && sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
-    [ -f /usr/lib/fwupd/efi/fwupdx64.efi ] && sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
-}
-
-setup_boot_timeout() {
-    local bootloader=$(cat "$STATE_DIR/bootloader")
-    
-    if [[ "$bootloader" == "systemd-boot" ]]; then
-        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
-        
-        if [ -z "$esp_path" ]; then
-            if [ -d /boot/loader ]; then
-                esp_path="/boot"
-            elif [ -d /boot/efi/loader ]; then
-                esp_path="/boot/efi"
-            elif [ -d /boot/EFI/systemd ]; then
-                esp_path="/boot"
-            elif [ -d /boot/efi/EFI/systemd ]; then
-                esp_path="/boot/efi"
-            else
-                if mount | grep -q "/boot/efi "; then
-                    esp_path="/boot/efi"
-                elif mount | grep -q "/boot "; then
-                    esp_path="/boot"
-                else
-                    return 1
-                fi
-            fi
-        fi
-        
-        local loader_conf=""
-        if [ -f "${esp_path}/loader/loader.conf" ]; then
-            loader_conf="${esp_path}/loader/loader.conf"
-        elif [ -f "/boot/loader/loader.conf" ]; then
-            loader_conf="/boot/loader/loader.conf"
-        elif [ -f "/boot/efi/loader/loader.conf" ]; then
-            loader_conf="/boot/efi/loader/loader.conf"
-        else
-            if [ -d "${esp_path}/loader" ]; then
-                loader_conf="${esp_path}/loader/loader.conf"
-            elif [ -d "/boot/loader" ]; then
-                loader_conf="/boot/loader/loader.conf"
-            else
-                sudo mkdir -p "${esp_path}/loader"
-                loader_conf="${esp_path}/loader/loader.conf"
-            fi
-        fi
-        
-        echo "timeout 2" | sudo tee "$loader_conf" > /dev/null
-        
-    elif [[ "$bootloader" == "grub" ]]; then
-        if [ -f /etc/default/grub ]; then
-            if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
-                sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
-            else
-                echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
-            fi
-            if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
-                sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
-            else
-                echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
-            fi
-            sudo update-grub
-        fi
-    fi
-}
+# ============================================================================
+# SELEÇÃO
+# ============================================================================
 
 select_desktop() {
     clear_screen
@@ -539,6 +368,10 @@ select_extras() {
     sleep 1
 }
 
+# ============================================================================
+# SETUP
+# ============================================================================
+
 setup_sources() {
     local distro=$(cat "$STATE_DIR/distro")
     
@@ -570,19 +403,6 @@ setup_sources() {
             echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
             
             sudo pacman -Syu --noconfirm
-            ;;
-    esac
-}
-
-install_base() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    case "$distro" in
-        debian)
-            sudo apt install -y podman git nano gamemode fastfetch
-            ;;
-        arch)
-            sudo pacman -S --noconfirm podman git nano fastfetch gamemode
             ;;
     esac
 }
@@ -623,6 +443,333 @@ setup_package_managers() {
         arch)
             sudo pacman -S --noconfirm flatpak
             flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+            ;;
+    esac
+}
+
+setup_network() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        sudo sed -i '/^allow-hotplug /s/^/#/' /etc/network/interfaces
+        sudo sed -i '/^iface .* inet /s/^/#/' /etc/network/interfaces
+        sudo sed -i '/^iface .* inet6 /s/^/#/' /etc/network/interfaces
+    fi
+}
+
+setup_zram() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        sudo apt install -y systemd-zram-generator
+    fi
+    
+    sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
+[zram0]
+zram-size = ram * 0.25
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+}
+
+setup_btrfs_compression() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    if [[ "$distro" == "debian" ]]; then
+        if mount | grep -q "btrfs"; then
+            sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
+            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
+            sudo mount -o remount /
+        fi
+    fi
+}
+
+setup_performance_vars() {
+    sudo mkdir -p /etc/environment.d
+    sudo tee /etc/environment.d/performance.conf > /dev/null <<EOF
+MESA_SHADER_CACHE_MAX_SIZE=12G
+__GL_SHADER_DISK_CACHE_SIZE=12000000000
+EOF
+}
+
+setup_boot_timeout() {
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    
+    if [[ "$bootloader" == "systemd-boot" ]]; then
+        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+        
+        if [ -z "$esp_path" ]; then
+            if [ -d /boot/loader ]; then
+                esp_path="/boot"
+            elif [ -d /boot/efi/loader ]; then
+                esp_path="/boot/efi"
+            elif [ -d /boot/EFI/systemd ]; then
+                esp_path="/boot"
+            elif [ -d /boot/efi/EFI/systemd ]; then
+                esp_path="/boot/efi"
+            else
+                if mount | grep -q "/boot/efi "; then
+                    esp_path="/boot/efi"
+                elif mount | grep -q "/boot "; then
+                    esp_path="/boot"
+                else
+                    return 1
+                fi
+            fi
+        fi
+        
+        local loader_conf=""
+        if [ -f "${esp_path}/loader/loader.conf" ]; then
+            loader_conf="${esp_path}/loader/loader.conf"
+        elif [ -f "/boot/loader/loader.conf" ]; then
+            loader_conf="/boot/loader/loader.conf"
+        elif [ -f "/boot/efi/loader/loader.conf" ]; then
+            loader_conf="/boot/efi/loader/loader.conf"
+        else
+            if [ -d "${esp_path}/loader" ]; then
+                loader_conf="${esp_path}/loader/loader.conf"
+            elif [ -d "/boot/loader" ]; then
+                loader_conf="/boot/loader/loader.conf"
+            else
+                sudo mkdir -p "${esp_path}/loader"
+                loader_conf="${esp_path}/loader/loader.conf"
+            fi
+        fi
+        
+        echo "timeout 2" | sudo tee "$loader_conf" > /dev/null
+        
+    elif [[ "$bootloader" == "grub" ]]; then
+        if [ -f /etc/default/grub ]; then
+            if grep -q "^GRUB_TIMEOUT=" /etc/default/grub; then
+                sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=2/' /etc/default/grub
+            else
+                echo 'GRUB_TIMEOUT=2' | sudo tee -a /etc/default/grub
+            fi
+            if grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
+                sudo sed -i 's/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
+            else
+                echo 'GRUB_TIMEOUT_STYLE=menu' | sudo tee -a /etc/default/grub
+            fi
+            sudo update-grub
+        fi
+    fi
+}
+
+setup_secureboot() {
+    local distro=$(cat "$STATE_DIR/distro")
+    local bootloader=$(cat "$STATE_DIR/bootloader")
+    local motherboard_brand=$(cat "$STATE_DIR/motherboard_brand")
+    local secureboot_state=$(cat "$STATE_DIR/secureboot_state")
+    local secureboot_support=$(cat "$STATE_DIR/secureboot_support")
+    
+    if [[ "$secureboot_support" == "unsupported" ]]; then
+        return 0
+    fi
+    
+    if [[ "$distro" == "debian" ]]; then
+        if ! command -v mokutil &>/dev/null; then
+            return 0
+        fi
+        
+        if [[ "$secureboot_state" != "enabled" ]]; then
+            return 0
+        fi
+        
+        if [ ! -f /var/lib/dkms/mok.pub ]; then
+            return 0
+        fi
+        
+        if sudo mokutil --list-enrolled 2>/dev/null | grep -q "Debian Secure Boot"; then
+            return 0
+        fi
+        
+        sudo mokutil --import /var/lib/dkms/mok.pub
+        
+    elif [[ "$distro" == "arch" ]]; then
+        if [[ "$bootloader" != "systemd-boot" ]]; then
+            return 0
+        fi
+        
+        if [[ "$secureboot_state" == "enabled" ]]; then
+            return 0
+        fi
+        
+        if ! command -v sbctl &>/dev/null; then
+            sudo pacman -S --noconfirm sbctl
+        fi
+        
+        if ! sudo sbctl status 2>/dev/null | grep -q "Setup Mode.*Enabled"; then
+            return 0
+        fi
+        
+        if [ ! -f /etc/secureboot/keys/db/db.key ] && [ ! -f /usr/share/secureboot/keys/db/db.key ]; then
+            sudo sbctl create-keys
+        fi
+        
+        if ! sudo sbctl status | grep -q "Vendor Keys:.*microsoft"; then
+            if [[ "$motherboard_brand" == "asus" ]] || [[ "$motherboard_brand" == "gigabyte" ]]; then
+                sudo sbctl enroll-keys --microsoft
+            else
+                sudo sbctl enroll-keys --microsoft --firmware-builtin
+            fi
+        fi
+        
+        if [ -f /boot/vmlinuz-linux ]; then
+            sudo sbctl sign -s /boot/vmlinuz-linux || true
+        fi
+        if [ -f /boot/vmlinuz-linux-lts ]; then
+            sudo sbctl sign -s /boot/vmlinuz-linux-lts || true
+        fi
+        
+        if [ -f /boot/EFI/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+        elif [ -f /boot/efi/Linux/arch-linux.efi ]; then
+            sudo sbctl sign -s /boot/efi/Linux/arch-linux.efi || true
+        else
+            sudo mkdir -p /boot/EFI/Linux
+            sudo mkinitcpio -P
+            [ -f /boot/EFI/Linux/arch-linux.efi ] && sudo sbctl sign -s /boot/EFI/Linux/arch-linux.efi || true
+        fi
+        
+        local esp_path=$(cat "$STATE_DIR/esp_path" 2>/dev/null)
+        [ -z "$esp_path" ] && esp_path="/boot"
+        
+        [ -f "${esp_path}/EFI/systemd/systemd-bootx64.efi" ] && sudo sbctl sign -s "${esp_path}/EFI/systemd/systemd-bootx64.efi" || true
+        [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && sudo sbctl sign -s -o /usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed /usr/lib/systemd/boot/efi/systemd-bootx64.efi || true
+        [ -f "${esp_path}/EFI/BOOT/BOOTX64.EFI" ] && sudo sbctl sign -s "${esp_path}/EFI/BOOT/BOOTX64.EFI" || true
+        [ -f /usr/lib/fwupd/efi/fwupdx64.efi ] && sudo sbctl sign -s -o /usr/lib/fwupd/efi/fwupdx64.efi.signed /usr/lib/fwupd/efi/fwupdx64.efi || true
+    fi
+}
+
+# ============================================================================
+# INSTALAÇÃO
+# ============================================================================
+
+install_base() {
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    case "$distro" in
+        debian)
+            sudo apt install -y podman git nano gamemode fastfetch
+            ;;
+        arch)
+            sudo pacman -S --noconfirm podman git nano fastfetch gamemode
+            ;;
+    esac
+}
+
+install_nvidia_with_mok() {
+    local debian_version=""
+    
+    if [ -f /etc/debian_version ]; then
+        debian_version=$(cat /etc/debian_version)
+    fi
+    
+    if [ -z "$debian_version" ]; then
+        return 1
+    fi
+    
+    if echo "$debian_version" | grep -qiE "testing|sid"; then
+        echo "${CYAN}Digite a versão do Debian para o driver NVIDIA (ex: 12, 11, 10):${NC}"
+        read -p "Versão: " user_version
+        
+        if [ -n "$user_version" ]; then
+            debian_version="$user_version"
+        else
+            return 1
+        fi
+    else
+        debian_version=$(echo "$debian_version" | cut -d. -f1)
+    fi
+    
+    sudo apt install -y linux-headers-amd64
+    
+    curl -LO https://developer.download.nvidia.com/compute/cuda/repos/debian${debian_version}/x86_64/cuda-keyring_1.1-1_all.deb
+    sudo dpkg -i cuda-keyring_1.1-1_all.deb
+    sudo apt update
+    sudo apt -y install nvidia-open
+    rm -f cuda-keyring_1.1-1_all.deb
+    
+    if ! command -v mokutil &>/dev/null; then
+        sudo apt install -y mokutil
+    fi
+    
+    if [ ! -f /var/lib/dkms/mok.pub ]; then
+        sudo dkms generate_mok
+    fi
+    
+    if [ -f /var/lib/dkms/mok.pub ]; then
+        echo "${YELLOW}Importando chave MOK para Secure Boot...${NC}"
+        echo "${YELLOW}Digite uma senha (8-16 caracteres) quando solicitado:${NC}"
+        sudo mokutil --import /var/lib/dkms/mok.pub
+        
+        echo "${GREEN}✓ Chave MOK importada com sucesso!${NC}"
+        echo "${YELLOW}⚠ IMPORTANTE:${NC}"
+        echo "${YELLOW}  1. Reinicie o sistema${NC}"
+        echo "${YELLOW}  2. Durante a reinicialização, siga as instruções na tela para confirmar a senha${NC}"
+        echo "${YELLOW}  3. Após confirmar, o driver NVIDIA será carregado corretamente${NC}"
+    else
+        echo "${RED}✗ Arquivo /var/lib/dkms/mok.pub não encontrado${NC}"
+    fi
+}
+
+install_gpu_drivers() {
+    local gpu=$(cat "$STATE_DIR/gpu_driver")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    case "$distro" in
+        debian)
+            case "$gpu" in
+                intel|amd)
+                    sudo apt install -y mesa-vulkan-drivers
+                    ;;
+                nvidia)
+                    install_nvidia_with_mok
+                    ;;
+            esac
+            ;;
+            
+        arch)
+            case "$gpu" in
+                intel)
+                    sudo pacman -S --noconfirm vulkan-intel
+                    ;;
+                amd)
+                    sudo pacman -S --noconfirm vulkan-radeon
+                    ;;
+                nvidia)
+                    sudo pacman -S --noconfirm nvidia-open
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+install_cpu_microcode() {
+    local cpu=$(cat "$STATE_DIR/cpu")
+    local distro=$(cat "$STATE_DIR/distro")
+    
+    case "$distro" in
+        debian)
+            case "$cpu" in
+                intel)
+                    sudo apt install -y intel-microcode
+                    ;;
+                amd)
+                    sudo apt install -y amd64-microcode
+                    ;;
+            esac
+            ;;
+        arch)
+            case "$cpu" in
+                intel)
+                    sudo pacman -S --noconfirm intel-ucode
+                    ;;
+                amd)
+                    sudo pacman -S --noconfirm amd-ucode
+                    ;;
+            esac
             ;;
     esac
 }
@@ -805,117 +952,9 @@ install_extras() {
     done
 }
 
-setup_network() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        sudo sed -i '/^allow-hotplug /s/^/#/' /etc/network/interfaces
-        sudo sed -i '/^iface .* inet /s/^/#/' /etc/network/interfaces
-        sudo sed -i '/^iface .* inet6 /s/^/#/' /etc/network/interfaces
-    fi
-}
-
-setup_zram() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        sudo apt install -y systemd-zram-generator
-        sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
-[zram0]
-zram-size = ram * 0.25
-compression-algorithm = zstd
-swap-priority = 100
-EOF
-    elif [[ "$distro" == "arch" ]]; then
-        sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
-[zram0]
-zram-size = ram * 0.25
-compression-algorithm = zstd
-swap-priority = 100
-EOF
-    fi
-}
-
-setup_btrfs_compression() {
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    if [[ "$distro" == "debian" ]]; then
-        if mount | grep -q "btrfs"; then
-            sudo sed -i '/btrfs.*compress,/s/compress,/compress=zstd,/g' /etc/fstab
-            sudo sed -i '/btrfs.*compress[^=]/s/compress/compress=zstd/g' /etc/fstab
-            sudo sed -i '/btrfs.*compress=zlib/s/compress=zlib/compress=zstd/g' /etc/fstab
-            sudo mount -o remount /
-        fi
-    fi
-}
-
-install_gpu_drivers() {
-    local gpu=$(cat "$STATE_DIR/gpu_driver")
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    case "$distro" in
-        debian)
-            case "$gpu" in
-                intel|amd)
-                    sudo apt install -y mesa-vulkan-drivers
-                    ;;
-                nvidia)
-                    install_nvidia_with_mok
-                    ;;
-            esac
-            ;;
-            
-        arch)
-            case "$gpu" in
-                intel)
-                    sudo pacman -S --noconfirm vulkan-intel
-                    ;;
-                amd)
-                    sudo pacman -S --noconfirm vulkan-radeon
-                    ;;
-                nvidia)
-                    sudo pacman -S --noconfirm nvidia-open
-                    ;;
-            esac
-            ;;
-    esac
-}
-
-install_cpu_microcode() {
-    local cpu=$(cat "$STATE_DIR/cpu")
-    local distro=$(cat "$STATE_DIR/distro")
-    
-    case "$distro" in
-        debian)
-            case "$cpu" in
-                intel)
-                    sudo apt install -y intel-microcode
-                    ;;
-                amd)
-                    sudo apt install -y amd64-microcode
-                    ;;
-            esac
-            ;;
-        arch)
-            case "$cpu" in
-                intel)
-                    sudo pacman -S --noconfirm intel-ucode
-                    ;;
-                amd)
-                    sudo pacman -S --noconfirm amd-ucode
-                    ;;
-            esac
-            ;;
-    esac
-}
-
-setup_performance_vars() {
-    sudo mkdir -p /etc/environment.d
-    sudo tee /etc/environment.d/performance.conf > /dev/null <<EOF
-MESA_SHADER_CACHE_MAX_SIZE=12G
-__GL_SHADER_DISK_CACHE_SIZE=12000000000
-EOF
-}
+# ============================================================================
+# LIMPEZA
+# ============================================================================
 
 remove_packages() {
     local distro=$(cat "$STATE_DIR/distro")
@@ -925,6 +964,10 @@ remove_packages() {
         sudo apt autoremove -y
     fi
 }
+
+# ============================================================================
+# FINALIZAÇÃO
+# ============================================================================
 
 ask_reboot() {
     echo ""
@@ -937,7 +980,12 @@ ask_reboot() {
     fi
 }
 
+# ============================================================================
+# MAIN
+# ============================================================================
+
 main() {
+    # DETECÇÃO
     detect_distro
     detect_gpu
     detect_cpu
@@ -945,34 +993,38 @@ main() {
     detect_bootloader
     detect_secureboot_support
     
+    # SELEÇÃO
     select_desktop
     select_produtividade
     select_multimidia
     select_games
     select_extras
     
+    # SETUP (configuração de fontes e infraestrutura)
     setup_sources
+    
+    # INSTALAÇÃO (pacotes e aplicativos)
     install_base
-    setup_security
     install_cpu_microcode
     install_gpu_drivers
     install_desktop
-    setup_package_managers
     install_produtividade
     install_multimidia
     install_games
     install_extras
+    
+    # SETUP (configurações pós-instalação)
+    setup_security
+    setup_package_managers
     setup_network
     setup_zram
     setup_btrfs_compression
     setup_performance_vars
     remove_packages
     setup_boot_timeout
+    setup_secureboot
     
-    if [[ "$(cat "$STATE_DIR/distro")" == "arch" ]]; then
-        setup_secureboot_arch
-    fi
-    
+    # FINALIZAÇÃO
     ask_reboot
 }
 
